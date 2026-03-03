@@ -1,0 +1,53 @@
+{
+  "server": {
+    "user": "YOUR_USERNAME",
+    "pass": "YOUR_PASSWORD",
+    "worldName": "My World",
+    "worldId": "YOUR_WORLD_UUID"
+  },
+  "paths": {
+    "worldSave": "/path/to/GNUstep/Library/ApplicationSupport/TheBlockheads/saves/YOUR_WORLD_UUID/",
+    "python": "python3",
+    "worldManager": "./tools/world_manager.py",
+    "inventoryReader": "./tools/inventory_reader.py",
+    "wildLocations": "./tools/wild_locations.py",
+    "eventLog": "./proxy/interceptor/blockheads_events.jsonl",
+    "privateMessages": "./data/private_messages.jsonl",
+    "commandEvents": "./data/command_events.jsonl",
+    "serverLog": "./data/blockheads.log",
+    "inputPipe": "./data/blockheads_input",
+    "dataDir": "./data"
+  },
+  "game": {
+    "spawn": { "x": 0, "y": 0 },
+    "arena": { "x": 0, "y": 0, "radius": 50 },
+    "forbiddenItemIds": [1074, 206, 300]
+  },
+  "economy": {
+    "wildCost": 25,
+    "wildCooldownMs": 300000,
+    "wildMinY": 521,
+    "wildMaxY": 600,
+    "wildMinSpawnDistance": 5000,
+    "tpaCost": 0,
+    "tpaCooldownMs": 60000,
+    "tpaExpireMs": 90000,
+    "dailyReward": 200
+  },
+  "shop": [
+    { "key": "portal_chest", "name": "Portal Chest", "itemId": 1074, "price": 12500, "count": 1 },
+    { "key": "ownership_sign", "name": "Ownership Sign", "itemId": 301, "price": 600, "count": 1 },
+    { "key": "sunrise_hat", "name": "Sunrise Hat of Fullness", "itemId": 140, "price": 400, "count": 1 },
+    { "key": "sunset_skirt", "name": "Sunset Skirt of Happiness", "itemId": 141, "price": 500, "count": 1 },
+    { "key": "north_pole_hat", "name": "North Pole Hat of Warmth", "itemId": 142, "price": 600, "count": 1 },
+    { "key": "south_pole_boots", "name": "South Pole Boots of Speed", "itemId": 143, "price": 500, "count": 1 },
+    { "key": "infinite_food", "name": "Infinite Food", "itemId": 59, "price": 2000, "count": 9999, "preferBasket": true },
+    { "key": "infinite_coffee", "name": "Infinite Coffee", "itemId": 81, "price": 3000, "count": 999, "preferBasket": true },
+    { "key": "diamond", "name": "Diamond", "itemId": 88, "price": 400, "count": 1 }
+  ],
+  "jobs": [
+    { "key": "RAILROAD_INSTALLER", "name": "Railroad Installer", "dailyPay": 200 },
+    { "key": "PUBLIC_BUILDER", "name": "Public Builder", "dailyPay": 200 },
+    { "key": "ELECTRICIAN", "name": "Electrician", "dailyPay": 200 }
+  ]
+}

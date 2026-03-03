@@ -1,0 +1,72 @@
+plugins {
+    id 'java-library'
+}
+
+group 'com.juanmuscaria'
+version '1.0-SNAPSHOT'
+
+allprojects {
+    group = rootProject.group
+    version = rootProject.version
+
+    pluginManager.withPlugin('java') {
+        repositories {
+            mavenCentral()
+        }
+
+        java {
+            toolchain {
+                languageVersion.set(JavaLanguageVersion.of(21))
+            }
+        }
+
+        configurations {
+            compileOnly {
+                extendsFrom annotationProcessor
+            }
+        }
+
+        dependencies {
+            annotationProcessor 'org.projectlombok:lombok:1.18.30'
+            implementation 'info.picocli:picocli:4.7.5'
+            implementation 'com.google.guava:guava:33.0.0-jre'
+            implementation 'org.lmdbjava:lmdbjava:0.8.3'
+            implementation 'it.unimi.dsi:fastutil:8.5.12'
+            implementation 'org.fusesource.jansi:jansi:2.4.1'
+
+            // Logging
+            implementation 'org.slf4j:slf4j-api:2.0.9'
+            implementation 'ch.qos.logback:logback-classic:1.4.14'
+
+            // Be able to decode objective c stuff
+            implementation 'com.googlecode.plist:dd-plist:1.27'
+
+            // http stuff
+            implementation 'com.google.code.gson:gson:2.10.1'
+            implementation 'com.github.monkeywie:proxyee:1.7.6'
+
+            // Todo: remove in favor of Foreign Memory/Function API
+            implementation 'net.java.dev.jna:jna:5.14.0'
+
+            // Testing stuff I'll never use because who tests codes?
+            testImplementation 'org.junit.jupiter:junit-jupiter-api:5.6.0'
+            testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+        }
+
+        test {
+            useJUnitPlatform()
+        }
+
+        tasks.withType(JavaCompile).configureEach {
+            options.compilerArgs += ['--enable-preview']
+        }
+
+        tasks.withType(JavaExec).configureEach {
+            jvmArgs += '--enable-preview'
+            jvmArgs += '--enable-native-access=ALL-UNNAMED'
+            jvmArgs += '--add-opens=java.base/java.nio=ALL-UNNAMED,'
+            jvmArgs += '-Djansi.mode=force'
+            jvmArgs += '-Dpicocli.ansi=true'
+        }
+    }
+}

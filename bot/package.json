@@ -1,0 +1,27 @@
+{
+  "name": "blockheads-server-bot",
+  "version": "1.0.0",
+  "description": "Bot for The Blockheads game servers — quests, shop, teleport, jobs, activity monitoring, and more.",
+  "main": "build/mac.js",
+  "author": "Saad",
+  "license": "MIT",
+  "dependencies": {
+    "@bhmb/bot": "^7.0.7",
+    "@bhmb/messages": "^1.0.6",
+    "@bhmb/server": "^0.0.2",
+    "blockheads-api": "^0.3.9",
+    "fetch-cookie": "^0.7.0",
+    "node-fetch": "^1.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "18",
+    "patch-package": "^8.0.0",
+    "typescript": "5"
+  },
+  "scripts": {
+    "build": "tsc",
+    "mac": "node build/mac.js",
+    "clean": "rm -rf build",
+    "postinstall": "patch-package"
+  }
+}

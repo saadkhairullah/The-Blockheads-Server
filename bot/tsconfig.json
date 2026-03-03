@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "outDir": "./build",
+        "target": "es2017",
+        "lib": [
+            "dom",
+            "es7",
+            "dom.iterable",
+            "scripthost"
+        ],
+        "moduleResolution": "node",
+        "module": "commonjs",
+        "target": "es2017",
+        "noImplicitAny": true,
+        "strictNullChecks": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true
+    },
+    "exclude": [
+        "extensions"
+    ]
+}

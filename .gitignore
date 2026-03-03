@@ -1,0 +1,56 @@
+# Runtime data
+data/
+!data/.gitkeep
+*.jsonl
+*.log
+
+# Config with secrets
+config/config.json
+config/.env
+
+# Build artifacts
+bot/build/
+bot/build.bak/
+bot/node_modules/
+proxy/build/
+proxy/build.bak/
+proxy/.gradle/
+tools/__pycache__/
+tools/*.pyc
+tools/blockheads_venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+*.egg
+venv/
+.venv/
+
+# Java / Gradle
+.gradle/
+build/
+!proxy/build.gradle
+*.class
+*.jar
+
+# Patches (tracked)
+!bot/patches/
