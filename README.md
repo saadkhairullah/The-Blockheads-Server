@@ -66,7 +66,7 @@ You need to either: (a) change the port players connect to from 15151 to 15153, 
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/blockheads-server-tools.git
+git clone https://github.com/saadkhairullah/blockheads-server-tools.git
 cd blockheads-server-tools
 
 # Create your config from the template
