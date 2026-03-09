@@ -145,7 +145,7 @@ def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_
     db_path = save_path + "world_db"
 
     try:
-        env = lmdb.open(db_path, readonly=True, max_dbs=100, map_size=8 * 1024 * 1024 * 1024)
+        env = lmdb.open(db_path, readonly=True, max_dbs=100, map_size=6 * 1024 * 1024 * 1024)
 
         # First: just get all chunk keys (no parsing - very fast)
         chunk_keys = []

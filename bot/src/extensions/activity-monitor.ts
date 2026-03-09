@@ -11,7 +11,6 @@ import {
   createActivityContext,
   LOG_BOT_DEBUG, LOG_BLOCKHEAD_MAP, LOG_PATH,
   MAX_PLAYER_CACHE, BLOCKHEAD_REFRESH_INTERVAL_MS, ACTIVE_PLAYER_WINDOW_MS,
-  WORLD_SAVE_PATH, PYTHON_PATH, REWARD_SCRIPT,
   setWithLimit, markPlayerActive, pruneMap,
 } from './activity/activity-context'
 import {
@@ -26,9 +25,6 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   console.log('Activity Monitor extension loaded!')
 
   const ctx = createActivityContext(ex.bot)
-
-  // Initialize blockhead service (shared with quest-system, only first init matters)
-  BlockheadService.initBlockheadService(PYTHON_PATH, REWARD_SCRIPT, WORLD_SAVE_PATH, 15)
 
   // Load portal chest buyers on startup
   loadPortalChestBuyers(ctx)

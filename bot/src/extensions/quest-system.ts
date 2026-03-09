@@ -1,10 +1,9 @@
 import { MessageBot } from '@bhmb/bot'
-import * as BlockheadService from '../blockhead-service'
 import { sharedMappingState, pruneMappingCaches, getBlockheadsForUuid, listBlockheadsForPlayerByUuid } from './helpers/blockhead-mapping'
 import { setKillCallback } from '../linux-api'
 
 // Sub-modules
-import { createQuestContext, WORLD_SAVE_PATH, PYTHON_PATH, REWARD_SCRIPT } from './quests/quest-context'
+import { createQuestContext } from './quests/quest-context'
 import { loadQuestProgress, loadPendingRewards, saveQuestProgress, savePendingRewards, startAutoSave, stopAutoSave, getPlayerProgress } from './quests/quest-persistence'
 import { getInventoryCount, hasFreshInventory, startInventoryPolling, stopInventoryPolling } from './quests/quest-inventory'
 import { checkQuestCompletion, isPlayerCurrentlyAtLocation } from './quests/quest-completion'
@@ -16,9 +15,6 @@ MessageBot.registerExtension('quest-system', (ex) => {
   console.log('Quest System extension loaded!')
 
   const ctx = createQuestContext(ex)
-
-  // Initialize the shared blockhead daemon service
-  BlockheadService.initBlockheadService(PYTHON_PATH, REWARD_SCRIPT, WORLD_SAVE_PATH, 10)
 
   // Wire cross-module function references on the context
   ctx.checkQuestCompletion = (playerName: string) => checkQuestCompletion(ctx, playerName)
@@ -191,19 +187,7 @@ MessageBot.registerExtension('quest-system', (ex) => {
   // Startup
   // -------------------------------------------------------------------------
 
-  Promise.all([loadQuestProgress(ctx), loadPendingRewards(ctx)]).then(async () => {
-    // Fetch full blockhead index from daemon on startup
-    try {
-      const fullIndex = await BlockheadService.getFullBlockheadIndex()
-      for (const [playerUuid, blockheadIds] of fullIndex.entries()) {
-        const { attachBlockheadsToUuid } = require('./helpers/blockhead-mapping')
-        attachBlockheadsToUuid(playerUuid, Array.from(blockheadIds), sharedMappingState)
-      }
-      console.log(`[Quest System] Pre-loaded ${fullIndex.size} player->blockhead mappings`)
-    } catch (err) {
-      console.error('[Quest System] Failed to pre-load blockhead index:', err)
-    }
-
+  Promise.all([loadQuestProgress(ctx), loadPendingRewards(ctx)]).then(() => {
     startWatching(ctx)
     startInventoryPolling(ctx)
     startAutoSave(ctx)

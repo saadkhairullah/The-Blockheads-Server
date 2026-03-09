@@ -36,7 +36,7 @@ def _sync_gs_inventory_key(gs, world_db_path, inv_key):
     Single O(log n) key read -- negligible cost.
     """
     try:
-        env = lmdb.open(world_db_path, readonly=True, max_dbs=10, map_size=8 * 1024 * 1024 * 1024)
+        env = lmdb.open(world_db_path, readonly=True, max_dbs=10, map_size=6 * 1024 * 1024 * 1024)
         try:
             with env.begin() as txn:
                 main_db = env.open_db(b'main', txn=txn, create=False)
@@ -68,7 +68,7 @@ def apply_quest_items_targeted(save_path, blockhead_uid, remove_items, give_item
     world_db_path = os.path.join(save_path, "world_db")
     env = None
     try:
-        env = lmdb.open(world_db_path, max_dbs=10, map_size=8 * 1024 * 1024 * 1024)
+        env = lmdb.open(world_db_path, max_dbs=10, map_size=6 * 1024 * 1024 * 1024)
         with env.begin(write=True) as txn:
             main_db = env.open_db(b'main', txn=txn, create=False)
 
@@ -172,7 +172,7 @@ def give_item_to_blockhead(save_path, blockhead_uid, item_id, count, player_uuid
     world_db_path = os.path.join(save_path, "world_db")
     env = None
     try:
-        env = lmdb.open(world_db_path, max_dbs=10, map_size=8 * 1024 * 1024 * 1024)
+        env = lmdb.open(world_db_path, max_dbs=10, map_size=6 * 1024 * 1024 * 1024)
         with env.begin(write=True) as txn:
             main_db = env.open_db(b'main', txn=txn, create=False)
 
@@ -251,7 +251,7 @@ def take_item_from_blockhead(save_path, blockhead_uid, item_id, count, player_uu
     world_db_path = os.path.join(save_path, "world_db")
     env = None
     try:
-        env = lmdb.open(world_db_path, max_dbs=10, map_size=8 * 1024 * 1024 * 1024)
+        env = lmdb.open(world_db_path, max_dbs=10, map_size=6 * 1024 * 1024 * 1024)
         with env.begin(write=True) as txn:
             main_db = env.open_db(b'main', txn=txn, create=False)
 
@@ -350,7 +350,7 @@ def teleport_blockhead_targeted(save_path, player_uuid, blockhead_uid, x, y):
     world_db_path = os.path.join(save_path, "world_db")
     env = None
     try:
-        env = lmdb.open(world_db_path, max_dbs=10, map_size=8 * 1024 * 1024 * 1024)
+        env = lmdb.open(world_db_path, max_dbs=10, map_size=6 * 1024 * 1024 * 1024)
         with env.begin(write=True) as txn:
             main_db = env.open_db(b'main', txn=txn, create=False)
             raw = txn.get(bh_key, db=main_db)
@@ -389,6 +389,92 @@ def teleport_blockhead_targeted(save_path, player_uuid, blockhead_uid, x, y):
             return {"ok": True, "_bh_key": bh_key}  # _bh_key internal only, stripped before JSON
     except Exception as e:
         return {"ok": False, "error": f"teleport_blockhead_targeted error: {e}"}
+    finally:
+        if env is not None:
+            try:
+                env.close()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Targeted read operations (no write, no GameSave)
+# ---------------------------------------------------------------------------
+
+def get_blockhead_position(save_path, player_uuid, blockhead_uid):
+    """Get a blockhead's position from LMDB. Returns {"ok": True, "x": N, "y": N} or error."""
+    uuid_nodash = player_uuid.replace('-', '')
+    bh_key = f"{uuid_nodash}_blockheads".encode('utf-8')
+    world_db_path = os.path.join(save_path, "world_db")
+    env = None
+    try:
+        env = lmdb.open(world_db_path, readonly=True, max_dbs=10, map_size=6 * 1024 * 1024 * 1024, lock=False)
+        with env.begin() as txn:
+            main_db = env.open_db(b'main', txn=txn, create=False)
+            raw = txn.get(bh_key, db=main_db)
+            if not raw:
+                return {"ok": False, "error": "blockheads_key_not_found"}
+            bh_wrapper = parse_value(raw)
+            bh_data = bh_wrapper._data[0]._data
+            if not isinstance(bh_data, dict):
+                return {"ok": False, "error": "invalid_blockheads_data"}
+            for obj in bh_data.get('dynamicObjects', []):
+                obj_data = obj
+                if hasattr(obj_data, '_data'):
+                    obj_data = obj_data._data
+                if isinstance(obj_data, list) and len(obj_data) == 1:
+                    obj_data = obj_data[0]
+                    if hasattr(obj_data, '_data'):
+                        obj_data = obj_data._data
+                if not isinstance(obj_data, dict):
+                    continue
+                if obj_data.get('uniqueID') == blockhead_uid:
+                    return {"ok": True, "x": obj_data.get('pos_x', 0), "y": obj_data.get('pos_y', 0)}
+            return {"ok": False, "error": "blockhead_not_found"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        if env is not None:
+            try:
+                env.close()
+            except Exception:
+                pass
+
+
+def list_blockheads_with_names(save_path, player_uuid):
+    """List blockheads with their in-game names from the _blockheads LMDB key."""
+    uuid_nodash = player_uuid.replace('-', '')
+    bh_key = f"{uuid_nodash}_blockheads".encode('utf-8')
+    world_db_path = os.path.join(save_path, "world_db")
+    env = None
+    try:
+        env = lmdb.open(world_db_path, readonly=True, max_dbs=10, map_size=6 * 1024 * 1024 * 1024, lock=False)
+        with env.begin() as txn:
+            main_db = env.open_db(b'main', txn=txn, create=False)
+            raw = txn.get(bh_key, db=main_db)
+            if not raw:
+                return {"ok": True, "blockheads": []}
+            bh_wrapper = parse_value(raw)
+            bh_data = bh_wrapper._data[0]._data
+            if not isinstance(bh_data, dict):
+                return {"ok": True, "blockheads": []}
+            result = []
+            for obj in bh_data.get('dynamicObjects', []):
+                obj_data = obj
+                if hasattr(obj_data, '_data'):
+                    obj_data = obj_data._data
+                if isinstance(obj_data, list) and len(obj_data) == 1:
+                    obj_data = obj_data[0]
+                    if hasattr(obj_data, '_data'):
+                        obj_data = obj_data._data
+                if isinstance(obj_data, dict):
+                    result.append({
+                        "blockheadId": obj_data.get('uniqueID'),
+                        "name": obj_data.get('name', 'Unknown'),
+                    })
+            return {"ok": True, "blockheads": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "blockheads": []}
     finally:
         if env is not None:
             try:

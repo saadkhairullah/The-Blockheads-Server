@@ -29,7 +29,7 @@ watchAdminList()
 
 const extensions = require('./extensions')
 require('./extensions')
-require('./extensions/test')
+require('./extensions/server-messages')
 require('./extensions/virtual-bank')
 require('./extensions/activity-monitor')
 require('./extensions/quest-system')
@@ -69,7 +69,7 @@ setLeaveCallback((player : any) => {
 bot.addExtension('extensions');
 (bot.getExports('extensions') as typeof extensions.ExtensionsExports).env = 'mac'
 bot.addExtension('@bhmb/server')
-bot.addExtension('test')
+bot.addExtension('server-messages')
 bot.addExtension('virtual-bank')
 bot.addExtension('activity-monitor')
 bot.addExtension('quest-system')

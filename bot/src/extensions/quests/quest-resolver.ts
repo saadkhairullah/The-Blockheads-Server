@@ -197,7 +197,7 @@ export const findBlockheadsWithItems = async (ctx: QuestContext, playerName: str
 
   const result: number[] = []
   for (const bhId of allIds) {
-    const counts = await getPlayerInventoryCounts(bhId)
+    const counts = await getPlayerInventoryCounts(bhId, playerUuid)
     if (!counts) continue
     const hasAll = itemIds.every(id => (counts[String(id)] ?? 0) > 0)
     if (hasAll) result.push(bhId)
@@ -205,9 +205,9 @@ export const findBlockheadsWithItems = async (ctx: QuestContext, playerName: str
   return result
 }
 
-const getPlayerInventoryCounts = async (blockheadId: number): Promise<{ [itemId: string]: number } | null> => {
+const getPlayerInventoryCounts = async (blockheadId: number, playerUuid: string): Promise<{ [itemId: string]: number } | null> => {
   try {
-    const counts = await BlockheadService.getInventoryCounts(blockheadId)
+    const counts = await BlockheadService.getInventoryCounts(blockheadId, playerUuid)
     return counts as { [itemId: string]: number } | null
   } catch {
     return null

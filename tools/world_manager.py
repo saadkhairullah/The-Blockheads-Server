@@ -28,6 +28,10 @@ from inventory_ops import (
 from targeted_lmdb_ops import (
     give_item_to_blockhead,
     take_item_from_blockhead,
+    teleport_blockhead_targeted,
+    apply_quest_items_targeted,
+    get_blockhead_position,
+    list_blockheads_with_names,
 )
 from daemon import run_daemon
 
@@ -62,7 +66,7 @@ def print_container_contents(item_obj, indent=6):
 
                     print(f"{spaces}   Slot {slot_idx}: {item_name}{' x'+str(count) if count > 1 else ''}{durability}")
 
-        # Chest (16 slots)
+        # Chest (16 slots) doesnt really work yet
         else:
             if not item_obj.items[0].has_extra:
                 print(f"{spaces}-- Empty")
@@ -99,7 +103,7 @@ def print_container_contents(item_obj, indent=6):
     except Exception as e:
         print(f"{spaces}-- Error: {e}")
 
-
+# just a test script that uses the gs path
 def read_all_player_inventories(gs):
     """Read all player inventories using GameSave."""
     print("\n" + "="*80)
@@ -205,17 +209,22 @@ def main():
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--daemon", action="store_true", help="Run in daemon mode (read JSON commands from stdin)")
-    parser.add_argument("--reward-dirt", action="store_true", help="Give PLATIUM_COIN for a dirt pickup")
     parser.add_argument("--give-item", action="store_true", help="Give a specific item by id")
     parser.add_argument("--take-item", action="store_true", help="Take a specific item by id from a blockhead")
     parser.add_argument("--list-blockheads", action="store_true", help="List blockhead ids for a player UUID")
+    parser.add_argument("--list-blockheads-with-names", action="store_true", help="List blockhead ids and in-game names for a player UUID")
     parser.add_argument("--find-blockhead-owner", action="store_true", help="Find the player UUID that owns a blockhead")
     parser.add_argument("--inventory-counts", action="store_true", help="Get item counts for a blockhead")
     parser.add_argument("--player-inventory-counts", action="store_true", help="Get combined item counts for all blockheads of a player")
+    parser.add_argument("--get-blockhead-position", action="store_true", help="Get a blockhead's current X/Y position")
+    parser.add_argument("--teleport-blockhead", action="store_true", help="Teleport a blockhead to X/Y coordinates")
+    parser.add_argument("--apply-quest-items", action="store_true", help="Atomically remove consumed items and give reward items")
     parser.add_argument("--save-path", required=True, help="Path to world save")
     parser.add_argument("--blockhead-id", type=int, help="Blockhead id")
     parser.add_argument("--player-uuid", help="Player UUID")
@@ -223,6 +232,11 @@ if __name__ == "__main__":
     parser.add_argument("--count", type=int, default=1, help="Item count")
     parser.add_argument("--color", type=int, nargs="+", help="Dye color nibbles, 1-4 values each 0-15 (e.g. --color 3 or --color 6 6)")
     parser.add_argument("--damage", type=int, help="Damage value (0=full, 16000=broken)")
+    parser.add_argument("--basket-only", action="store_true", help="Place item in a basket only (skip main inventory slots)")
+    parser.add_argument("--x", type=int, help="X coordinate (for teleport)")
+    parser.add_argument("--y", type=int, help="Y coordinate (for teleport)")
+    parser.add_argument("--remove-items-json", type=str, help="JSON array of items to remove: [{itemId, count}]")
+    parser.add_argument("--give-items-json", type=str, help="JSON array of items to give: [{itemId, count}]")
     parser.add_argument("--auto-save-interval", type=int, default=10, help="Auto-save interval in seconds for daemon mode (default: 10)")
     args = parser.parse_args()
 
@@ -231,15 +245,16 @@ if __name__ == "__main__":
         run_daemon(args.save_path, args.auto_save_interval)
         raise SystemExit(0)
 
-    if args.reward_dirt:
-        if args.blockhead_id is None:
-            raise SystemExit("Missing --blockhead-id")
+
     if args.give_item:
         if args.blockhead_id is None:
             raise SystemExit("Missing --blockhead-id")
         if args.item_id is None:
             raise SystemExit("Missing --item-id")
-        ok = give_item_to_blockhead(args.save_path, args.blockhead_id, args.item_id, args.count, player_uuid=args.player_uuid, damage=args.damage, color=args.color)
+        ok = give_item_to_blockhead(args.save_path, args.blockhead_id, args.item_id, args.count,
+                                    player_uuid=args.player_uuid, damage=args.damage, color=args.color,
+                                    basket_only=args.basket_only)
+        print(json.dumps({"ok": bool(ok)}))
         raise SystemExit(0 if ok else 1)
     if args.take_item:
         if args.blockhead_id is None:
@@ -255,6 +270,12 @@ if __name__ == "__main__":
         ids = list_blockheads_for_player(args.save_path, args.player_uuid)
         print(json.dumps({"playerUuid": args.player_uuid, "blockheadIds": ids}))
         raise SystemExit(0)
+    if args.list_blockheads_with_names:
+        if not args.player_uuid:
+            raise SystemExit("Missing --player-uuid")
+        result = list_blockheads_with_names(args.save_path, args.player_uuid)
+        print(json.dumps(result))
+        raise SystemExit(0 if result.get("ok") else 1)
     if getattr(args, 'find_blockhead_owner', False):
         if args.blockhead_id is None:
             raise SystemExit("Missing --blockhead-id")
@@ -281,4 +302,37 @@ if __name__ == "__main__":
         counts = get_all_blockhead_inventory_counts(args.save_path, args.player_uuid)
         print(json.dumps({"playerUuid": args.player_uuid, "items": counts}))
         raise SystemExit(0)
+    if args.get_blockhead_position:
+        if args.blockhead_id is None:
+            raise SystemExit("Missing --blockhead-id")
+        if not args.player_uuid:
+            raise SystemExit("Missing --player-uuid")
+        result = get_blockhead_position(args.save_path, args.player_uuid, args.blockhead_id)
+        print(json.dumps(result))
+        raise SystemExit(0 if result.get("ok") else 1)
+    if args.teleport_blockhead:
+        if args.blockhead_id is None:
+            raise SystemExit("Missing --blockhead-id")
+        if not args.player_uuid:
+            raise SystemExit("Missing --player-uuid")
+        if args.x is None or args.y is None:
+            raise SystemExit("Missing --x or --y")
+        result = teleport_blockhead_targeted(args.save_path, args.player_uuid, args.blockhead_id, args.x, args.y)
+        result.pop("_bh_key", None)
+        print(json.dumps(result))
+        raise SystemExit(0 if result.get("ok") else 1)
+    if args.apply_quest_items:
+        if args.blockhead_id is None:
+            raise SystemExit("Missing --blockhead-id")
+        if not args.player_uuid:
+            raise SystemExit("Missing --player-uuid")
+        try:
+            remove_items = json.loads(args.remove_items_json or "[]")
+            give_items = json.loads(args.give_items_json or "[]")
+        except Exception:
+            print(json.dumps({"success": False, "error": "Invalid --remove-items-json or --give-items-json"}))
+            raise SystemExit(1)
+        result = apply_quest_items_targeted(args.save_path, args.blockhead_id, remove_items, give_items, args.player_uuid)
+        print(json.dumps(result))
+        raise SystemExit(0 if result.get("success") else 1)
     main()

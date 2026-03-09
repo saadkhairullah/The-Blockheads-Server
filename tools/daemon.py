@@ -76,7 +76,7 @@ def run_daemon(save_path, auto_save_interval=10):
         env = None
         try:
             db_path = os.path.join(save_path, "world_db")
-            env = lmdb.open(db_path, readonly=True, max_dbs=100, map_size=8 * 1024 * 1024 * 1024, lock=False)
+            env = lmdb.open(db_path, readonly=True, max_dbs=100, map_size=6 * 1024 * 1024 * 1024, lock=False)
             with env.begin() as txn:
                 main_db = env.open_db(b"main", txn=txn, create=False)
                 raw_value = txn.get(key_bytes, db=main_db)

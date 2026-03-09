@@ -35,9 +35,9 @@ export const hasFreshInventory = (ctx: QuestContext, playerName: string): boolea
   return (Date.now() - cache.lastUpdated) <= (INVENTORY_POLL_INTERVAL * 2)
 }
 
-export const getPlayerInventoryCounts = async (blockheadId: number): Promise<{ [itemId: string]: number } | null> => {
+export const getPlayerInventoryCounts = async (blockheadId: number, playerUuid: string): Promise<{ [itemId: string]: number } | null> => {
   try {
-    const counts = await BlockheadService.getInventoryCounts(blockheadId)
+    const counts = await BlockheadService.getInventoryCounts(blockheadId, playerUuid)
     return counts as { [itemId: string]: number } | null
   } catch {
     return null
@@ -210,18 +210,17 @@ export const refreshInventoryOnMove = async (ctx: QuestContext, playerName: stri
   ctx.pendingInventoryRefresh.delete(playerName)
   try {
     const playerUuid = ctx.playerToUuid.get(playerName)
+    if (!playerUuid) return
     const knownIds = getKnownBlockheadsForPlayer(ctx, playerName)
     if (knownIds.length > 1) {
-      if (playerUuid) {
-        const counts = await getPlayerInventoryCountsAny(playerUuid)
-        if (counts) {
-          setInventoryCacheEntry(ctx, playerName, { items: counts, lastUpdated: Date.now(), blockheadId: -1 })
-        }
+      const counts = await getPlayerInventoryCountsAny(playerUuid)
+      if (counts) {
+        setInventoryCacheEntry(ctx, playerName, { items: counts, lastUpdated: Date.now(), blockheadId: -1 })
       }
       return
     }
     const targetId = knownIds[0] ?? blockheadId
-    const counts = await getPlayerInventoryCounts(targetId)
+    const counts = await getPlayerInventoryCounts(targetId, playerUuid)
     if (counts) {
       setInventoryCacheEntry(ctx, playerName, { items: counts, lastUpdated: Date.now(), blockheadId: targetId })
     }

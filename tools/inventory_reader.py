@@ -140,7 +140,7 @@ def get_inventory_counts_fast(save_path: str, player_uuid: str) -> dict[int, int
             str(world_db_path),
             readonly=True,
             max_dbs=10,
-            map_size=8 * 1024 * 1024 * 1024,  # 8GB max
+            map_size=6 * 1024 * 1024 * 1024,  # 6GB max
             readahead=False,  # Don't prefetch - we only need specific keys
             lock=False  # Read-only, no need for locks
         )
@@ -206,7 +206,7 @@ def get_blockhead_inventory_counts_fast(save_path: str, player_uuid: str, blockh
             str(world_db_path),
             readonly=True,
             max_dbs=10,
-            map_size=8 * 1024 * 1024 * 1024,  # 8GB max
+            map_size=6 * 1024 * 1024 * 1024,  # 6GB max
             readahead=False,
             lock=False
         )

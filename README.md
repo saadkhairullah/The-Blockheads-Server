@@ -29,11 +29,22 @@ A comprehensive server management toolkit for [The Blockheads](https://theblockh
 
 ## Prerequisites
 
-- **Linux** (The Blockheads server is Linux-only)
+- **Linux** (The Blockheads server binary is Linux-only)
+- **64-bit OS and Python** (LMDB maps 8GB of virtual address space; 32-bit will not work)
 - **Node.js 18+** (for the bot)
-- **Python 3.8+** with `lmdb` package (for world save tools)
-- **Java 21+** (for the proxy)
+- **Python 3.8+ (64-bit)** with `lmdb` package (for world save tools)
+- **Java 21+** (for the proxy — uses preview features, requires exactly Java 21)
 - **The Blockheads server** running on the same machine
+
+## How It Fits Together
+
+The Blockheads server listens on a UDP port (default 15151). The proxy sits in front of it: players connect to the proxy port (15153) and the proxy forwards traffic to the server (15151) while intercepting all packets.
+
+```
+Players → UDP :15153 → Proxy → UDP :15151 → Blockheads Server
+```
+
+You need to either: (a) change the port players connect to from 15151 to 15153, or (b) update your firewall to redirect 15151 → 15153.
 
 ## Quick Start
 
@@ -45,10 +56,26 @@ cd blockheads-server-tools
 
 # Create your config from the template
 cp config/config.example.json config/config.json
-# Edit config/config.json with your server details
 ```
 
-### 2. Install bot dependencies
+Open `config/config.json` and fill in the required fields:
+
+| Field | How to find it |
+|-------|---------------|
+| `server.user` | Your in-game username (you'll be set as admin) |
+| `server.pass` | Your server's admin password |
+| `server.worldId` | The UUID directory name under your saves directory |
+| `paths.worldSave` | Full path to that UUID directory |
+
+The saves directory is typically `~/.local/share/TheBlockheads/saves/` on Linux. The world ID is the UUID-named folder inside it.
+
+All other fields have working defaults.
+
+### 2. Become an admin
+
+Add your in-game username (uppercase) to `<paths.worldSave>/adminlist.txt`, one name per line. Admin commands (`/deposit`, `/give`, `/tp`, etc.) will not work until your name is in this file.
+
+### 3. Install bot dependencies
 
 ```bash
 cd bot
@@ -57,7 +84,7 @@ npm run build  # Compile TypeScript
 cd ..
 ```
 
-### 3. Install Python dependencies
+### 4. Install Python dependencies
 
 ```bash
 cd tools
@@ -65,23 +92,63 @@ pip install -r requirements.txt
 cd ..
 ```
 
-### 4. Build the proxy
+### 5. Build the proxy
 
 ```bash
 cd proxy
-./gradlew :interceptor:build
+./gradlew :interceptor:installDist
 cd ..
 ```
 
-### 5. Start everything
+This produces a launch script at `proxy/interceptor/build/install/interceptor/bin/interceptor` that includes the correct classpath and required JVM flags (`--enable-preview`, `--enable-native-access`, etc.).
+
+### 6. Compile the item injection library
+
+`blockheads_give.so` is an `LD_PRELOAD` library that adds `/give` and `/give-id` commands to the server's stdin interface. The source is included at `blockheads_give.c`.
+
+```bash
+gcc -shared -fPIC -o blockheads_give.so blockheads_give.c -lobjc -ldl -lpthread
+```
+
+Requires `libobjc` (GNUstep Objective-C runtime):
+
+```bash
+sudo apt install gobjc gnustep-devel
+```
+
+### 7. Start the Blockheads server
+
+The server must be started with the item injection library preloaded, and with its stdin piped from the file the bot writes admin commands to.
+
+```bash
+nohup bash -c 'tail -f /path/to/blockheads_input | \
+  LD_PRELOAD=/path/to/blockheads_give.so \
+  ./blockheads_server171 \
+  -o YOUR_WORLD_UUID \
+  -s 67 -m 32 \
+  --owner YOUR_USERNAME \
+  --no-exit 2>&1 | tee /path/to/blockheads.log' &
+```
+
+Replace the placeholders:
+
+| Placeholder | Where to find it |
+|-------------|-----------------|
+| `/path/to/blockheads_input` | Must match `paths.inputPipe` in `config.json` |
+| `/path/to/blockheads_give.so` | Path to the compiled library from step 6 |
+| `YOUR_WORLD_UUID` | Must match `server.worldId` in `config.json` |
+| `YOUR_USERNAME` | Your in-game owner username |
+| `/path/to/blockheads.log` | Must match `paths.serverLog` in `config.json` |
+
+The `tail -f blockheads_input` pipe is how the bot sends kick and chat commands to the server. The `tee blockheads.log` output is how the bot detects player joins, leaves, and chat.
+
+### 8. Start the proxy and bot
 
 ```bash
 # Terminal 1: Start the proxy (intercepts game traffic)
-cd proxy
-java -jar interceptor/build/libs/interceptor.jar \
-  -P 15153 -S 15151 \
-  -DbH.privateMessagesFile=../data/private_messages.jsonl \
-  -Dbh.commandEventsFile=../data/command_events.jsonl
+JAVA_OPTS="-Dbh.privateMessagesFile=$(pwd)/data/private_messages.jsonl \
+           -Dbh.commandEventsFile=$(pwd)/data/command_events.jsonl" \
+  proxy/interceptor/build/install/interceptor/bin/interceptor -P 15153 -S 15151
 
 # Terminal 2: Start the bot
 cd bot
@@ -226,23 +293,34 @@ The proxy accepts these JVM system properties:
 
 **Bot won't start / "Missing config file"**
 - Ensure `config/config.json` exists (copy from `config/config.example.json`)
-- Check that all required paths are correct
+- Check that `server.worldId` and `paths.worldSave` are filled in correctly
 
 **Teleport doesn't work**
 - The game server caches player positions in RAM. The bot kicks the player before writing to LMDB so changes take effect on reconnect.
 - Check that `paths.worldSave` points to the correct LMDB save directory.
 
 **Quests not tracking inventory**
-- The daemon must be running (started automatically by the bot)
-- Check that `paths.worldManager` and `paths.python` are correct
+- Check that `paths.worldManager`, `paths.inventoryReader`, and `paths.python` are correct
+- Verify Python can open the world save: `python3 tools/inventory_reader.py --save-path /your/world/save --list-blockheads --player-uuid YOUR_UUID`
+
+**LMDB error on open**
+- You must use 64-bit Python. The tools reserve a 6GB virtual address mapping; this is impossible in a 32-bit process.
+- Verify `paths.worldSave` points to the directory containing `world_db/` (with a trailing slash).
 
 **Events not detected**
 - Ensure the proxy is running and `paths.eventLog` points to the proxy's output file
-- The proxy writes to `blockheads_events.jsonl` in its working directory
+- The proxy writes `blockheads_events.jsonl` in its working directory by default
+
+**Admin commands not working**
+- Your username (uppercase) must be in `<paths.worldSave>/adminlist.txt`. The bot reads this file to determine admins.
 
 **Bot freezes / 100% CPU**
 - The `@bhmb/server` patch fixes a known infinite loop bug. Run `npm install` to re-apply patches.
 - Check `data/node-stack-dump.txt` (send `kill -USR2 <pid>` to generate)
+
+**Proxy won't start / JVM errors**
+- Java 21 is required. The proxy uses preview features and will fail with older JVMs.
+- Use the `installDist` script rather than `java -jar` — the generated script at `proxy/interceptor/build/install/interceptor/bin/interceptor` includes all required JVM flags automatically.
 
 ## Acknowledgements
 

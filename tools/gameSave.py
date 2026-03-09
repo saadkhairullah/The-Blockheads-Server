@@ -35,7 +35,7 @@ class GameSave:
 
     MAX_DBS = 100
     # Default to a large mapsize to avoid MDB_MAP_RESIZED on busy worlds
-    MIN_MAP_SIZE = 8 * 1024 * 1024 * 1024  # 8 GB
+    MIN_MAP_SIZE = 6 * 1024 * 1024 * 1024  # 6 GB
     MAP_SIZE_MULTIPLIER = 4
     MAP_SIZE_PADDING = 8 * 1024 * 1024
 

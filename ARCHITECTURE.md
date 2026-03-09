@@ -3,40 +3,42 @@
 ## System Overview
 
 ```
-┌───────────┐         ┌────────────────┐         ┌───────────────────┐
-│  Players  │◄──UDP──►│  Proxy (Java)  │◄──UDP──►│ Blockheads Server │
-└───────────┘         └───────┬────────┘         └───────────────────┘
-                              │
-                    writes events.jsonl
-                              │
-                              ▼
-                     ┌────────────────┐
-                     │   Bot (Node)   │
-                     │                │
-                     │  - Quests      │
-                     │  - Shop        │
-                     │  - Teleport    │
-                     │  - Jobs        │
-                     │  - Bank        │
-                     │  - Activity    │
-                     └───────┬────────┘
-                             │
-                   JSON over stdin/stdout
-                             │
-                             ▼
-                    ┌─────────────────┐
-                    │  Daemon (Python) │
-                    │  (persistent)    │
-                    └───────┬─────────┘
-                            │
-                      LMDB read/write
-                            │
-                            ▼
-                    ┌─────────────────┐
-                    │   World Save    │
-                    │   (LMDB files)  │
-                    └─────────────────┘
+                              events.jsonl
+              ┌───────────────────────────────────────┐
+              │                                       ▼
+┌──────────┐  │  ┌─────────────────┐  UDP   ┌──────────────────────────┐
+│ Players  │◄────►│  Proxy (Java)   │◄──────►│   Blockheads Server      │
+└──────────┘  │  │                 │        │                          │
+        UDP   │  │  - ENet relay   │        │  writes blockheads.log ──┼──┐
+              │  │  - packet decode│        │                          │  │
+              │  │  - msg inject ◄─┼──┐     │  reads/writes            │  │
+              │  └─────────────────┘  │     │  World Save (LMDB) ◄─────┼──┼──┐
+              │                       │     └──────────────────────────┘  │  │
+              │           private_messages.jsonl                           │  │
+              │                       │    kick/chat via input pipe        │  │
+              │                       └──────────────┐                    │  │
+              │                                      │                    │  │
+              ▼                                      │◄───────────────────┘  │
+   ┌──────────────────────────────────────────────┐  │  blockheads.log        │
+   │  Bot (Node.js)                               │  │                        │
+   │                                              │  │                        │
+   │  linux-api.ts      — tails blockheads.log ◄──┘  │                        │
+   │  activity-monitor  — processes events.jsonl      │                        │
+   │  quest-system      — inventory polling, rewards  │                        │
+   │  teleport-system   — /wild /tpa /spawn /tp       │                        │
+   │  virtual-bank      — token economy               │                        │
+   │  shop-system       — item purchases              │                        │
+   │  job-system        — hiring, daily pay           │  spawns per-op         │
+   │  whisper           — private messaging           │──────────────┐         │
+   └──────────────────────────────────────────────────┘              ▼         │
+                                                           ┌──────────────────┐│
+                                                           │  Python Tools    ││
+                                                           │  world_manager   │◄┘
+                                                           │  inventory_reader│ direct LMDB
+                                                           └──────────────────┘ read/write
 ```
+
+The World Save (LMDB) is the game server's own database. The bot's Python tools access it directly — reading inventory and position data, and writing changes (give/take items, teleport). This only works safely because the bot kicks the player first, clearing the game server's in-memory cache before any write.
 
 ## Components
 
@@ -76,35 +78,35 @@ The bot watches the game server log and event files, responding to player action
 
 **Key modules:**
 - `config.ts` — Central configuration (loads `config/config.json` with env var overrides)
-- `blockhead-service.ts` — Python daemon IPC (manages LMDB operations)
+- `blockhead-service.ts` — Spawns Python per-operation for all LMDB reads/writes
 - `linux-api.ts` — Watches `blockheads.log` for join/leave/chat events
 - `private-message.ts` — Writes messages to JSONL for the proxy to deliver
 - `shared-queue.ts` — FIFO task serialization to prevent race conditions
 
-### Daemon (Python, `tools/`)
+### Python Tools (`tools/`)
 
-A persistent Python process that keeps the LMDB world save open for fast operations.
+Stateless Python scripts invoked per-operation by the bot. Each spawn opens LMDB, performs the operation, and exits. No persistent process.
 
-**Why a daemon?** Each Python invocation takes ~200ms to open LMDB. The daemon keeps it open and responds in ~1-5ms per operation. It also batches writes — 10 separate saves become 1 batched save.
+**Why per-op spawns instead of a persistent daemon?**
+The game server also writes to LMDB (inventory changes, position updates). A persistent daemon holding LMDB open would see stale data after any game server write. Per-op spawns always read fresh from disk.
 
-**Protocol:** JSON over stdin/stdout. One JSON object per line.
+**Latency:** ~80-150ms Python startup overhead. Acceptable because:
+- Inventory polling runs on a 15s interval
+- Give/take/teleport operations kick the player first (~3s before reconnect)
 
-**Read operations:**
-- `list-blockheads` — Get blockhead IDs for a player UUID
-- `inventory-counts` — Get item counts for a blockhead
-- `get-blockhead-position` — Get X/Y coordinates
-- `get-full-index` — Full player→blockheads mapping
+**`world_manager.py`** — Write operations and position reads (uses `gameSave`/`lmdb` directly):
+- `--give-item` — Add item to blockhead inventory
+- `--take-item` — Remove item from blockhead inventory
+- `--teleport-blockhead` — Set blockhead X/Y position
+- `--apply-quest-items` — Atomic remove + give (for quest completion)
+- `--get-blockhead-position` — Read X/Y coordinates
+- `--list-blockheads-with-names` — Read blockhead IDs and in-game character names
 
-**Write operations (deferred save):**
-- `give-item` — Add item to blockhead inventory
-- `take-item` — Remove item from blockhead inventory
-- `teleport-blockhead` — Set blockhead X/Y position
-- `apply-quest-items` — Atomic remove + give (for quest completion)
-
-**Control:**
-- `save` / `save-if-dirty` — Force LMDB flush
-- `reload` — Re-read from disk
-- `ping` / `status` — Health checks
+**`inventory_reader.py`** — Fast read-only inventory access (opens LMDB directly, no GameSave):
+- `--list-blockheads` — Get blockhead IDs for a player UUID
+- `--blockhead-inventory-counts` — Get item counts for one blockhead
+- `--inventory-counts` — Get combined item counts for all blockheads of a player
+- `--inventory-counts-batch` — Get all online players' inventories in one spawn
 
 ## Data Flow: Key Operations
 
@@ -112,13 +114,12 @@ A persistent Python process that keeps the LMDB world save open for fast operati
 
 ```
 1. Player picks up item → Proxy detects ITEM_PICKUP → writes event to events.jsonl
-2. Bot's quest-system reads event → checks inventory via daemon
-3. Daemon returns inventory counts → bot checks against quest requirements
-4. All requirements met → bot calls daemon apply-quest-items
-5. Daemon removes consumed items + gives rewards (deferred save)
-6. Bot kicks player (clears game server's RAM cache)
-7. Daemon auto-saves within 10 seconds
-8. Player reconnects → sees new inventory state from LMDB
+2. Bot's quest-system reads event → checks inventory via inventory_reader.py spawn
+3. inventory_reader returns counts → bot checks against quest requirements
+4. All requirements met → bot kicks player FIRST (clears game server's RAM cache)
+5. Bot calls world_manager.py --apply-quest-items
+6. Python opens LMDB, removes consumed items + gives rewards atomically, closes
+7. Player reconnects → sees new inventory state from LMDB
 ```
 
 ### Teleport (/wild, /tpa, /spawn)
@@ -127,8 +128,8 @@ A persistent Python process that keeps the LMDB world save open for fast operati
 1. Player types /wild in chat → Proxy forwards to bot via command_events.jsonl
 2. Bot checks balance, cooldown → calls wild_locations.py for coordinates
 3. Bot kicks player FIRST (critical: clears game server's position cache)
-4. Bot calls daemon teleport-blockhead (writes new X/Y to LMDB)
-5. Daemon saves (fast, <100ms, completes before player can reconnect)
+4. Bot calls world_manager.py --teleport-blockhead (writes new X/Y to LMDB)
+5. Python spawn completes in ~100ms, well before player can reconnect (~3s)
 6. Player reconnects → game server reads position from LMDB → player is at new location
 ```
 
@@ -152,28 +153,25 @@ In The Blockheads, one player account can own up to 5 blockheads (characters) in
 **Mapping chain:** Player Name → Player UUID → Blockhead IDs
 
 The bot maintains bidirectional mappings in `helpers/blockhead-mapping.ts`. These are populated from:
-- Daemon's `list-blockheads` command (UUID → blockhead IDs)
+- `inventory_reader.py --list-blockheads` (UUID → blockhead IDs, called on player join)
 - Proxy's `BlockheadsData` packet (blockhead ID → player name)
 - Proxy's `ClientInformation` packet (player name → UUID)
 
 ### Cache Coherency
 
-The game server, bot, and daemon all cache player data differently:
+The game server and bot cache player data differently:
 
 | Cache | Scope | Cleared By |
 |-------|-------|------------|
 | Game server RAM | Position, inventory (per-player) | Player disconnect (kick) |
-| Bot mappings | Player↔blockhead maps | `sharedMappingState` refresh |
-| Daemon GameSave | Full LMDB snapshot | `reload` command |
-| Daemon targeted ops | Individual LMDB keys | Auto-synced after write |
+| Bot mappings | Player↔blockhead maps | `sharedMappingState` refresh on join |
 
 **Rule:** For LMDB writes to take effect, the player must be offline (kicked) when the write happens, OR the player must reconnect after the write.
 
 ### Concurrency Control
 
-- `MAX_CONCURRENT_REQUESTS = 4` in `blockhead-service.ts` — Limits simultaneous daemon requests to prevent stdout buffer overflow
 - `shared-queue.ts` — FIFO task queue for serializing operations that must not interleave (shop purchases, quest rewards)
-- Daemon batches writes with auto-save every 10 seconds
+- Python spawns are naturally isolated — each gets its own LMDB transaction
 
 ## Extension System
 
@@ -195,31 +193,26 @@ MessageBot.registerExtension('my-extension', (ex) => {
 
 Extensions communicate via the `helpers/extension-api.ts` export system — each extension registers its public API, and other extensions look it up by name.
 
-## IPC Protocol (Daemon)
+## world_manager.py CLI Reference
 
-The daemon reads JSON commands from stdin and writes JSON responses to stdout, one per line. Responses are matched to requests in FIFO order.
+All operations share `--save-path <path>` as a required argument.
 
-**Startup:** Daemon sends `{"ready": true, "autoSaveInterval": 10}` when initialized.
+```bash
+# Read operations (inventory_reader.py — fast, read-only)
+python3 inventory_reader.py --save-path <path> --list-blockheads --player-uuid <uuid>
+python3 inventory_reader.py --save-path <path> --blockhead-inventory-counts --blockhead-id <id> --player-uuid <uuid>
+python3 inventory_reader.py --save-path <path> --inventory-counts --player-uuid <uuid>
+python3 inventory_reader.py --save-path <path> --inventory-counts-batch --player-uuids-json '[...]'
 
-**Request format:**
-```json
-{"op": "give-item", "blockheadId": 123, "itemId": 88, "count": 1}
+# Read operations (world_manager.py)
+python3 world_manager.py --save-path <path> --get-blockhead-position --blockhead-id <id> --player-uuid <uuid>
+python3 world_manager.py --save-path <path> --list-blockheads-with-names --player-uuid <uuid>
+
+# Write operations (world_manager.py)
+python3 world_manager.py --save-path <path> --give-item --blockhead-id <id> --item-id <id> --count <n> [--player-uuid <uuid>] [--basket-only]
+python3 world_manager.py --save-path <path> --take-item --blockhead-id <id> --item-id <id> --count <n> [--player-uuid <uuid>]
+python3 world_manager.py --save-path <path> --teleport-blockhead --blockhead-id <id> --player-uuid <uuid> --x <n> --y <n>
+python3 world_manager.py --save-path <path> --apply-quest-items --blockhead-id <id> --player-uuid <uuid> --remove-items-json '[...]' --give-items-json '[...]'
 ```
 
-**Response format:**
-```json
-{"ok": true}
-```
-
-**Error format:**
-```json
-{"ok": false, "error": "Blockhead not found"}
-```
-
-**Batch operations:**
-```json
-{"op": "batch", "commands": [
-  {"op": "give-item", "blockheadId": 123, "itemId": 88, "count": 1},
-  {"op": "take-item", "blockheadId": 123, "itemId": 34, "count": 1}
-]}
-```
+All operations output JSON to stdout and exit 0 on success, 1 on failure.

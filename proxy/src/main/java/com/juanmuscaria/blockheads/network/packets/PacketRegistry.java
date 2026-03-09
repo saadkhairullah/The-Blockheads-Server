@@ -28,6 +28,7 @@ public class PacketRegistry {
     clientPackets.put(RequestWorldChunk.ID, RequestWorldChunk.class);
     clientPackets.put(RequestChatHistory.ID, RequestChatHistory.class);
     clientPackets.put(DynamicObjectCreateClient.ID, DynamicObjectCreateClient.class);
+    clientPackets.put(DynamicObjectUpdateClient.ID, DynamicObjectUpdateClient.class);
     clientPackets.put(KeepAlive.ID, KeepAlive.class);
     clientPackets.put(UpdatePlayerActionsAndState.ID, UpdatePlayerActionsAndState.class);
     clientPackets.put(DynamicObjectRemoveClient.ID, DynamicObjectRemoveClient.class);
