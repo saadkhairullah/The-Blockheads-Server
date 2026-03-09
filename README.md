@@ -137,6 +137,7 @@ The server must be started with the item injection library preloaded, and with i
 
 ```bash
 nohup bash -c 'tail -f /path/to/blockheads_input | \
+  BH_ADMIN_LIST_PATH=/path/to/saves/YOUR_WORLD_UUID/adminlist.txt \
   LD_PRELOAD=/path/to/blockheads_give.so \
   ./blockheads_server171 \
   -o YOUR_WORLD_UUID \
@@ -150,6 +151,7 @@ Replace the placeholders:
 | Placeholder | Where to find it |
 |-------------|-----------------|
 | `/path/to/blockheads_input` | Must match `paths.inputPipe` in `config.json` |
+| `/path/to/saves/YOUR_WORLD_UUID/adminlist.txt` | Path to your world's adminlist (`paths.worldSave` + `adminlist.txt`) |
 | `/path/to/blockheads_give.so` | Path to the compiled library from step 6 |
 | `YOUR_WORLD_UUID` | Must match `server.worldId` in `config.json` |
 | `YOUR_USERNAME` | Your in-game owner username |
