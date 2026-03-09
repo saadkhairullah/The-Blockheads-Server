@@ -5,27 +5,41 @@ A comprehensive server management toolkit for [The Blockheads](https://theblockh
 ## Architecture Overview
 
 ```
-┌─────────────┐      UDP        ┌──────────────┐
-│   Players   │ ◄─────────────► │  Proxy (Java)│
-└─────────────┘                 └──────┬───────┘
-                                       │ events.jsonl
-                                       ▼
-                                ┌──────────────┐
-                                │   Bot (Node)  │
-                                └──────┬───────┘
-                                       │ JSON stdin/stdout
-                                       ▼
-                                ┌──────────────┐
-                                │ Daemon (Python)│
-                                └──────┬───────┘
-                                       │ LMDB
-                                       ▼
-                                ┌──────────────┐
-                                │  World Save   │
-                                └──────────────┘
+                                                     ┌─────────────────────┐
+                           ┌─────────────────────────►  Blockheads Server  │
+┌──────────┐  ┌────────────────────┐  kick/chat cmds │                     │
+│ Players  │◄─►  Proxy (Java)      │────────────────►│  blockheads.log ──┐ │
+└──────────┘  │  - ENet relay      │  via input pipe │                   │ │
+         UDP  │  - packet decode   │                 │  World Save       │ │
+              │  - events.jsonl ──►│─┐               │  (LMDB)      ◄────┼─┼──┐
+              │  - msg inject    ◄─┼─┘               └───────────────────┼─┘  │
+              └────────────────────┘  private_messages.jsonl             │    │
+                                                                         ▼    │
+                                                            ┌────────────────────────────┐
+                                                            │  Bot (Node.js)             │
+                                                            │                            │
+                                                            │  linux-api  ◄──────────────┘
+                                                            │  activity-monitor          │
+                                                            │  quest-system              │
+                                                            │  teleport / shop / bank    │
+                                                            └────────────┬───────────────┘
+                                                                         │ spawns per-op
+                                                                         ▼
+                                                            ┌────────────────────────┐
+                                                            │  Python Tools          │
+                                                            │  world_manager.py      │
+                                                            │  inventory_reader.py   │
+                                                            └────────────┬───────────┘
+                                                                         │ direct LMDB
+                                                                         │ read/write
+                                                                         ▼
+                                                            ┌────────────────────────┐
+                                                            │   World Save (LMDB)    │
+                                                            │   (server's database)  │
+                                                            └────────────────────────┘
 ```
 
-**Proxy** intercepts all game traffic, extracts events (movement, inventory changes, item pickups), and writes them to a JSONL file. **Bot** watches that file and reacts — running quests, shops, teleports, and enforcing rules. **Daemon** keeps the world's LMDB database open for fast reads/writes (give items, teleport players, check inventories).
+**Proxy** sits in front of the game server, intercepts all UDP traffic, and writes structured events to a JSONL file. **Bot** watches that file and the server log, responding to player actions by running quests, shops, teleports, and enforcing rules. For world save operations (give items, teleport, read inventory), the bot spawns **Python tools** that access the server's LMDB database directly — no persistent daemon.
 
 ## Prerequisites
 
