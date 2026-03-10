@@ -1,4 +1,5 @@
 /**
+ * This file allows communication between the bot process and the python LMDB tool
  * Blockhead service: per-operation Python spawns via execFileAsync.
  *
  * Each call spawns world_manager.py or inventory_reader.py for the specific
