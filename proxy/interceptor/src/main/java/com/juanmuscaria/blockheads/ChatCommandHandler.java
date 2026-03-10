@@ -144,6 +144,22 @@ public class ChatCommandHandler {
       String message = messageObj.toJavaObject(String.class);
       if (alias == null || alias.isEmpty()) return false;
 
+      // SECURITY: Verify alias is not already owned by a different connection
+      Long registeredClientId = playerNameToClientId.get(alias);
+      if (registeredClientId != null && registeredClientId != clientId) {
+        logger.warn("EXPLOIT BLOCKED: clientId {} tried to claim alias '{}' already owned by clientId {}",
+            clientId, alias, registeredClientId);
+        return false;
+      }
+
+      // SECURITY: Verify alias matches what this client registered with in 0x1F
+      String registeredAlias = clientIdToPlayerName.get(clientId);
+      if (registeredAlias != null && !registeredAlias.equals(alias)) {
+        logger.warn("EXPLOIT BLOCKED: clientId {} claimed alias '{}' but registered as '{}'",
+            clientId, alias, registeredAlias);
+        return false;
+      }
+
       // Only register mapping when player uses a command
       if (message != null && message.startsWith("/")) {
         registerPlayer(alias, clientId);
@@ -184,6 +200,7 @@ public class ChatCommandHandler {
         return true;  // Drop custom bot commands
       }
       // Also map on normal chat so we can whisper to players who haven't used / commands
+      // (alias already validated above — safe to register)
       registerPlayer(alias, clientId);
     } catch (Exception e) {
       // Silently ignore - most packets aren't chat packets
