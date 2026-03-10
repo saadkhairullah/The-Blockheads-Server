@@ -7,8 +7,6 @@ from bplist import BPList
 from gzipWrapper import GzipWrapper
 from bh_chunk import Chunk
 from block import Block
-from blockhead import Blockhead
-from inventory import Inventory
 from exportable import Exportable
 from dataclasses import dataclass
 from lmdb_parser import parse_value as _parse_value
@@ -223,28 +221,6 @@ class GameSave:
             chunks[name] = Chunk(chunks[name]._data[0])
         return chunks[name].get_block(x & 31, y & 31)
 
-    def get_blockheads(self) -> list[Blockhead]:
-        """
-        Return a list containing reference to dictionaries describing
-        blockheads.
-        """
-        return [
-            Blockhead(d)
-            for d in (
-                self["world_db"][b"main"][b"blockheads"]["dynamicObjects"]
-                if self.is_server_save
-                else self["world_db"]["main"]["blockheads"]["dynamicObjects"]
-            )
-        ]
-
-    def get_inventory(self, blockhead: Blockhead):
-        return Inventory(
-            self["world_db"][b"main"][b"blockhead_%d_inventory" % blockhead.get_uid()]
-            if self.is_server_save
-            else self["world_db"]["main"][
-                "blockhead_%d_inventory" % blockhead.get_uid()
-            ]
-        )
 
 
 if __name__ == "__main__":

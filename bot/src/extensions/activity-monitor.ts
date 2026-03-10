@@ -9,7 +9,7 @@ import { attachBlockheadsToPlayer, normalizePlayerName, sharedMappingState, prun
 // Sub-modules
 import {
   createActivityContext,
-  LOG_BOT_DEBUG, LOG_BLOCKHEAD_MAP, LOG_PATH,
+  LOG_BOT_DEBUG, LOG_BLOCKHEAD_MAP,
   MAX_PLAYER_CACHE, BLOCKHEAD_REFRESH_INTERVAL_MS, ACTIVE_PLAYER_WINDOW_MS,
   setWithLimit, markPlayerActive, pruneMap,
 } from './activity/activity-context'
@@ -392,10 +392,6 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   }
 
   ex.exports = {
-    getActivityLog: async () => {
-      const content = await readFile(LOG_PATH, 'utf8')
-      return content.split('\n').slice(-100).filter((l: string) => l.trim())
-    },
     addAdminAllowlist: (playerName: string) => addPortalChestBuyer(ctx, playerName),
     removeAdminAllowlist: (playerName: string) => removePortalChestBuyer(ctx, playerName),
     getBlockheadsForPlayer,

@@ -10,7 +10,6 @@ export const LOG_BOT_DEBUG = process.env.BH_LOG_BOT_DEBUG === '1'
 export const LOG_ACTIVITY_EVENTS = process.env.BH_LOG_ACTIVITY_EVENTS === '1'
 export const LOG_BLOCKHEAD_MAP = process.env.BH_LOG_BLOCKHEAD_MAP === '1'
 
-export const LOG_PATH = config.paths.eventLog
 export const WORLD_SAVE_PATH = config.paths.worldSave
 export const PYTHON_PATH = config.paths.python
 export const REWARD_SCRIPT = config.paths.worldManager

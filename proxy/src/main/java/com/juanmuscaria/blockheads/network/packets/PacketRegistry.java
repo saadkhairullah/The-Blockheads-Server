@@ -42,17 +42,8 @@ public class PacketRegistry {
    * @param from   The side the packet is from
    * @return The parsed packet, or null if it could not be parsed
    */
-  // Max packet size to parse (64KB) - prevents OOM from malicious oversized packets
-  private static final int MAX_PACKET_SIZE = 64 * 1024;
-
   @SneakyThrows(ReflectiveOperationException.class)
   public static Packet parsePacket(ByteBuffer buffer, Side from) {
-    // SECURITY: Reject oversized packets before allocating memory
-    if (buffer.remaining() > MAX_PACKET_SIZE) {
-      Packet.logger.warn("Rejecting oversized packet: {} bytes (max {})", buffer.remaining(), MAX_PACKET_SIZE);
-      return null;
-    }
-
     byte id = buffer.get();
     var packetClass = getPacketClass(id, from);
     if (packetClass != null) {

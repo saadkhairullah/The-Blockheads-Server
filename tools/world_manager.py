@@ -10,7 +10,6 @@ Sub-modules:
   world_settings.py     — worldv2 read/write (expert mode, portal level)
   inventory_ops.py      — Inventory queries (counts, space checks, clear)
   targeted_lmdb_ops.py  — Targeted LMDB writes (give, take, teleport, quest items)
-  daemon.py             — Persistent daemon mode (JSON over stdin/stdout)
 """
 
 import json
@@ -19,12 +18,6 @@ from gameSave import GameSave
 from item import Item
 from item_utils import get_basket_slots, get_slot_item, get_item_name
 from world_settings import get_worldv2
-from inventory_ops import (
-    find_player_uuid_for_blockhead,
-    list_blockheads_for_player,
-    get_inventory_counts,
-    get_all_blockhead_inventory_counts,
-)
 from targeted_lmdb_ops import (
     give_item_to_blockhead,
     take_item_from_blockhead,
@@ -33,7 +26,6 @@ from targeted_lmdb_ops import (
     get_blockhead_position,
     list_blockheads_with_names,
 )
-from daemon import run_daemon
 
 SAVE_PATH = None
 OUTPUT_PATH = None
@@ -214,14 +206,9 @@ def main():
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--daemon", action="store_true", help="Run in daemon mode (read JSON commands from stdin)")
     parser.add_argument("--give-item", action="store_true", help="Give a specific item by id")
     parser.add_argument("--take-item", action="store_true", help="Take a specific item by id from a blockhead")
-    parser.add_argument("--list-blockheads", action="store_true", help="List blockhead ids for a player UUID")
     parser.add_argument("--list-blockheads-with-names", action="store_true", help="List blockhead ids and in-game names for a player UUID")
-    parser.add_argument("--find-blockhead-owner", action="store_true", help="Find the player UUID that owns a blockhead")
-    parser.add_argument("--inventory-counts", action="store_true", help="Get item counts for a blockhead")
-    parser.add_argument("--player-inventory-counts", action="store_true", help="Get combined item counts for all blockheads of a player")
     parser.add_argument("--get-blockhead-position", action="store_true", help="Get a blockhead's current X/Y position")
     parser.add_argument("--teleport-blockhead", action="store_true", help="Teleport a blockhead to X/Y coordinates")
     parser.add_argument("--apply-quest-items", action="store_true", help="Atomically remove consumed items and give reward items")
@@ -237,14 +224,7 @@ if __name__ == "__main__":
     parser.add_argument("--y", type=int, help="Y coordinate (for teleport)")
     parser.add_argument("--remove-items-json", type=str, help="JSON array of items to remove: [{itemId, count}]")
     parser.add_argument("--give-items-json", type=str, help="JSON array of items to give: [{itemId, count}]")
-    parser.add_argument("--auto-save-interval", type=int, default=10, help="Auto-save interval in seconds for daemon mode (default: 10)")
     args = parser.parse_args()
-
-    # Daemon mode - run persistent process
-    if args.daemon:
-        run_daemon(args.save_path, args.auto_save_interval)
-        raise SystemExit(0)
-
 
     if args.give_item:
         if args.blockhead_id is None:
@@ -264,44 +244,12 @@ if __name__ == "__main__":
         result = take_item_from_blockhead(args.save_path, args.blockhead_id, args.item_id, args.count, player_uuid=args.player_uuid)
         print(json.dumps(result))
         raise SystemExit(0 if result.get("success") else 1)
-    if args.list_blockheads:
-        if not args.player_uuid:
-            raise SystemExit("Missing --player-uuid")
-        ids = list_blockheads_for_player(args.save_path, args.player_uuid)
-        print(json.dumps({"playerUuid": args.player_uuid, "blockheadIds": ids}))
-        raise SystemExit(0)
     if args.list_blockheads_with_names:
         if not args.player_uuid:
             raise SystemExit("Missing --player-uuid")
         result = list_blockheads_with_names(args.save_path, args.player_uuid)
         print(json.dumps(result))
         raise SystemExit(0 if result.get("ok") else 1)
-    if getattr(args, 'find_blockhead_owner', False):
-        if args.blockhead_id is None:
-            raise SystemExit("Missing --blockhead-id")
-        gs = GameSave.load_lite(args.save_path)
-        player_uuid = find_player_uuid_for_blockhead(gs, args.blockhead_id)
-        if player_uuid:
-            print(json.dumps({"blockheadId": args.blockhead_id, "playerUuid": player_uuid}))
-            raise SystemExit(0)
-        else:
-            print(json.dumps({"blockheadId": args.blockhead_id, "playerUuid": None, "error": "Owner not found"}))
-            raise SystemExit(1)
-    if args.inventory_counts:
-        if args.blockhead_id is None:
-            raise SystemExit("Missing --blockhead-id")
-        counts = get_inventory_counts(args.save_path, args.blockhead_id)
-        if counts is None:
-            print(json.dumps({"error": "Blockhead not found", "blockheadId": args.blockhead_id}))
-            raise SystemExit(1)
-        print(json.dumps({"blockheadId": args.blockhead_id, "items": counts}))
-        raise SystemExit(0)
-    if args.player_inventory_counts:
-        if not args.player_uuid:
-            raise SystemExit("Missing --player-uuid")
-        counts = get_all_blockhead_inventory_counts(args.save_path, args.player_uuid)
-        print(json.dumps({"playerUuid": args.player_uuid, "items": counts}))
-        raise SystemExit(0)
     if args.get_blockhead_position:
         if args.blockhead_id is None:
             raise SystemExit("Missing --blockhead-id")

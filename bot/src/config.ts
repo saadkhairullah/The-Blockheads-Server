@@ -19,7 +19,6 @@ export interface AppConfig {
     worldManager: string
     inventoryReader: string
     wildLocations: string
-    eventLog: string
     privateMessages: string
     commandEvents: string
     serverLog: string
@@ -126,7 +125,6 @@ export const config: AppConfig = {
     worldManager: resolvePath(envOr('BH_WORLD_MANAGER_PATH', parsed.paths?.worldManager ?? './tools/world_manager.py')),
     inventoryReader: resolvePath(envOr('BH_INVENTORY_READER_PATH', parsed.paths?.inventoryReader ?? './tools/inventory_reader.py')),
     wildLocations: resolvePath(envOr('BH_WILD_LOCATIONS_PATH', parsed.paths?.wildLocations ?? './tools/wild_locations.py')),
-    eventLog: resolvePath(envOr('BH_EVENT_LOG_PATH', parsed.paths?.eventLog ?? './proxy/interceptor/blockheads_events.jsonl')),
     privateMessages: resolvePath(envOr('BH_PRIVATE_MSG_PATH', parsed.paths?.privateMessages ?? './data/private_messages.jsonl')),
     commandEvents: resolvePath(envOr('BH_COMMAND_EVENTS_PATH', parsed.paths?.commandEvents ?? './data/command_events.jsonl')),
     serverLog: resolvePath(envOr('BH_SERVER_LOG_PATH', parsed.paths?.serverLog ?? './data/blockheads.log')),

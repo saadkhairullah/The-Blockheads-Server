@@ -11,7 +11,6 @@
     "worldManager": "./tools/world_manager.py",
     "inventoryReader": "./tools/inventory_reader.py",
     "wildLocations": "./tools/wild_locations.py",
-    "eventLog": "./proxy/interceptor/blockheads_events.jsonl",
     "privateMessages": "./data/private_messages.jsonl",
     "commandEvents": "./data/command_events.jsonl",
     "serverLog": "./data/blockheads.log",

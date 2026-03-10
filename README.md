@@ -201,7 +201,6 @@ All configuration lives in `config/config.json`. Every field can be overridden w
 | `paths.worldManager` | `BH_WORLD_MANAGER_PATH` | `./tools/world_manager.py` | World manager script |
 | `paths.inventoryReader` | `BH_INVENTORY_READER_PATH` | `./tools/inventory_reader.py` | Inventory reader script |
 | `paths.wildLocations` | `BH_WILD_LOCATIONS_PATH` | `./tools/wild_locations.py` | Wild teleport location finder |
-| `paths.eventLog` | `BH_EVENT_LOG_PATH` | `./proxy/interceptor/blockheads_events.jsonl` | Event log from proxy |
 | `paths.privateMessages` | `BH_PRIVATE_MSG_PATH` | `./data/private_messages.jsonl` | Private message queue |
 | `paths.dataDir` | `BH_DATA_DIR` | `./data` | Runtime data directory |
 
@@ -325,8 +324,8 @@ The proxy accepts these JVM system properties:
 - Verify `paths.worldSave` points to the directory containing `world_db/` (with a trailing slash).
 
 **Events not detected**
-- Ensure the proxy is running and `paths.eventLog` points to the proxy's output file
-- The proxy writes `blockheads_events.jsonl` in its working directory by default
+- Ensure the proxy is running and the UDS socket path matches `bh.udsEventSocket` (default `/tmp/bh-events.sock`)
+- The bot connects to this socket on startup; check both proxy and bot logs for connection errors
 
 **Admin commands not working**
 - Your username (uppercase) must be in `<paths.worldSave>/adminlist.txt`. The bot reads this file to determine admins.

@@ -4,34 +4,21 @@ import com.juanmuscaria.blockheads.network.ItemDecoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.nio.file.*;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Logs important game events to a file for bot consumption.
- * Events are written as JSON lines (one JSON object per line).
+ * Logs important game events and broadcasts them via Unix Domain Socket for bot consumption.
+ * Events are serialized as JSON lines (one JSON object per line).
  */
 public class EventLogger {
     private static final Logger logger = LoggerFactory.getLogger(EventLogger.class);
     private static EventLogger instance;
 
-    private final Path eventFile;
-    // Fix 3: Cap queue at 10,000 to prevent unbounded memory growth
     private final BlockingQueue<String> eventQueue = new LinkedBlockingQueue<>(10000);
     private final Thread writerThread;
     private volatile boolean running = true;
-
-    // Batch flush configuration
-    private static final int FLUSH_BATCH_SIZE = 50;
-    private static final long FLUSH_INTERVAL_MS = 500;
-
-    // Fix 6: Log rotation configuration
-    private static final long MAX_LOG_SIZE_BYTES = 500 * 1024 * 1024;  // 500 MB
-    private static final long ROTATION_CHECK_INTERVAL_MS = 60000;     // Check every 60 seconds
-    private volatile long lastRotationCheck = 0;
 
     // UDS broadcast (set by BHInterceptor after UDS server starts)
     private static volatile UDSEventServer udsServer;
@@ -51,20 +38,17 @@ public class EventLogger {
         300    // ELECTRIC_SLUICE
     );
 
-    private EventLogger(String filename) {
-        this.eventFile = Paths.get(filename);
-
-        // Start background writer thread
+    private EventLogger() {
         this.writerThread = new Thread(this::writeEvents, "EventLogger-Writer");
         this.writerThread.setDaemon(true);
         this.writerThread.start();
 
-        logger.info("EventLogger initialized, writing to: {}", eventFile.toAbsolutePath());
+        logger.info("EventLogger initialized (UDS broadcast mode)");
     }
 
     public static synchronized EventLogger getInstance() {
         if (instance == null) {
-            instance = new EventLogger("blockheads_events.jsonl");
+            instance = new EventLogger();
         }
         return instance;
     }
@@ -83,43 +67,6 @@ public class EventLogger {
             }
         } catch (Exception e) {
             logger.error("Error in event broadcast loop", e);
-        }
-    }
-
-    /**
-     * Fix 6: Rotate log file if it exceeds the size limit.
-     * Returns a new writer if rotation occurred, or the same writer if not.
-     */
-    private BufferedWriter checkAndRotateLog(BufferedWriter currentWriter) {
-        try {
-            if (!Files.exists(eventFile)) {
-                return currentWriter;
-            }
-
-            long fileSize = Files.size(eventFile);
-            if (fileSize < MAX_LOG_SIZE_BYTES) {
-                return currentWriter;
-            }
-
-            // Close current writer
-            currentWriter.flush();
-            currentWriter.close();
-
-            // Rotate: rename current to .old (overwriting any existing .old file)
-            Path oldFile = eventFile.resolveSibling(eventFile.getFileName() + ".old");
-            Files.deleteIfExists(oldFile);
-            Files.move(eventFile, oldFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-
-            logger.info("Rotated log file (was {} MB) -> {}", fileSize / (1024 * 1024), oldFile.getFileName());
-
-            // Open new writer
-            return Files.newBufferedWriter(eventFile,
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.APPEND);
-
-        } catch (Exception e) {
-            logger.warn("Failed to rotate log file: {}", e.getMessage());
-            return currentWriter;
         }
     }
 
