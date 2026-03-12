@@ -10,10 +10,6 @@ export const LOG_BOT_DEBUG = process.env.BH_LOG_BOT_DEBUG === '1'
 export const LOG_ACTIVITY_EVENTS = process.env.BH_LOG_ACTIVITY_EVENTS === '1'
 export const LOG_BLOCKHEAD_MAP = process.env.BH_LOG_BLOCKHEAD_MAP === '1'
 
-export const WORLD_SAVE_PATH = config.paths.worldSave
-export const PYTHON_PATH = config.paths.python
-export const REWARD_SCRIPT = config.paths.worldManager
-export const FAST_INVENTORY_SCRIPT = config.paths.inventoryReader
 export const SUSPICIOUS_LOG_PATH = join(config.paths.dataDir, 'suspicious-portal-chest.jsonl')
 export const PORTAL_CHEST_BUYERS_PATH = join(config.paths.dataDir, 'portal-chest-buyers.json')
 

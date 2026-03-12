@@ -17,7 +17,7 @@ const isShuttingDown = (): boolean => {
 
 export const travelKey = (req: QuestRequirement) => `travel_${req.x ?? 'any'}_${req.y ?? 'any'}`
 
-const sendDialogue = (playerName: string, dialogue: string | string[]): Promise<void> => {
+export const sendDialogue = (playerName: string, dialogue: string | string[]): Promise<void> => {
   const lines = Array.isArray(dialogue) ? dialogue : [dialogue]
   return new Promise(resolve => {
     lines.forEach((line, i) => {
@@ -310,7 +310,8 @@ const completeQuest = async (ctx: QuestContext, playerName: string, quest: Quest
     markQuestCompleted(ctx, playerName, quest)
 
     if (quest.dialogue) {
-      await sendDialogue(playerName, quest.dialogue)
+      const lines = Array.isArray(quest.dialogue) ? quest.dialogue : [quest.dialogue]
+      ctx.pendingKickDialogue.set(playerName, lines)
     }
 
     const rewardDescriptions = quest.rewards.map(r => formatReward(r)).join(', ')

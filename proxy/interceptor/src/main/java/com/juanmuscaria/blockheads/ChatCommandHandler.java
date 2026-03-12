@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ChatCommandHandler {
   private static final Logger logger = LoggerFactory.getLogger(ChatCommandHandler.class);
-  private static final Path COMMAND_EVENT_FILE = Path.of(System.getProperty("bh.commandEventsFile", "command_events.jsonl"));
+  private final Path COMMAND_EVENT_FILE;
 
   // Player name -> client peer address mapping (for private messages)
   private final Map<String, Long> playerNameToClientId = new ConcurrentHashMap<>();
@@ -45,6 +45,10 @@ public class ChatCommandHandler {
   private volatile int chatHistoryChannel = -1;
   private volatile byte chatPacketId = ChatHistory.ID;
   private volatile boolean chatPacketUsesMessagesArray = true;
+
+  public ChatCommandHandler(String commandEventsFile) {
+    this.COMMAND_EVENT_FILE = Path.of(commandEventsFile);
+  }
 
   public record ResolvedTarget(long clientId, String matchType) {}
 

@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from item import Item
 from lmdb_parser import parse_value
 from item_utils import make_item, get_basket_slots, set_basket_slots, get_slot_item, get_item_name
+from inventory_reader import parse_inventory_plist
 
 
 class WorldManager:
@@ -430,7 +431,7 @@ class WorldManager:
                     obj_data['floatPos'] = [float(x), float(y)]
 
                 txn.put(bh_key, bh_wrapper.export(), db=main_db)
-                return {"ok": True, "_bh_key": bh_key}
+                return {"ok": True}
         except Exception as e:
             return {"ok": False, "error": f"teleport_blockhead error: {e}"}
 
@@ -481,6 +482,86 @@ class WorldManager:
                 return {"ok": True, "blockheads": result}
         except Exception as e:
             return {"ok": False, "error": str(e), "blockheads": []}
+
+    # -----------------------------------------------------------------------
+    # Public API — inventory reads (uses persistent env via _read_txn)
+    # -----------------------------------------------------------------------
+
+    def list_blockheads(self, player_uuid: str) -> list:
+        """List all blockhead IDs for a player by scanning inventory keys."""
+        uuid_variants = [player_uuid, player_uuid.replace('-', '')]
+        suffix = b'_inventory'
+        try:
+            with self._read_txn() as (txn, main_db):
+                for uuid_variant in uuid_variants:
+                    prefix = f'{uuid_variant}_blockhead_'.encode('utf-8')
+                    cursor = txn.cursor(main_db)
+                    ids = []
+                    if cursor.set_range(prefix):
+                        while True:
+                            key = cursor.key()
+                            if not key.startswith(prefix):
+                                break
+                            if key.endswith(suffix):
+                                try:
+                                    key_str = key.decode('utf-8')
+                                    parts = key_str.split('_blockhead_')
+                                    if len(parts) == 2:
+                                        ids.append(int(parts[1].replace('_inventory', '')))
+                                except Exception:
+                                    pass
+                            if not cursor.next():
+                                break
+                    cursor.close()
+                    if ids:
+                        return sorted(set(ids))
+        except Exception as e:
+            print(f'[WorldManager] list_blockheads error for {player_uuid}: {e}')
+        return []
+
+    def get_inventory_counts(self, player_uuid: str) -> dict:
+        """Get combined inventory item counts across all blockheads of a player."""
+        uuid_variants = [player_uuid, player_uuid.replace('-', '')]
+        suffix = b'_inventory'
+        combined = {}
+        try:
+            with self._read_txn() as (txn, main_db):
+                for uuid_variant in uuid_variants:
+                    prefix = f'{uuid_variant}_blockhead_'.encode('utf-8')
+                    cursor = txn.cursor(main_db)
+                    if cursor.set_range(prefix):
+                        while True:
+                            key = cursor.key()
+                            if not key.startswith(prefix):
+                                break
+                            if key.endswith(suffix):
+                                value = cursor.value()
+                                if value:
+                                    for item_id, count in parse_inventory_plist(value).items():
+                                        combined[item_id] = combined.get(item_id, 0) + count
+                            if not cursor.next():
+                                break
+                    cursor.close()
+                    if combined:
+                        break
+        except Exception as e:
+            print(f'[WorldManager] get_inventory_counts error for {player_uuid}: {e}')
+        return combined
+
+    def get_blockhead_inventory_counts(self, player_uuid: str, blockhead_id: int) -> dict:
+        """Get inventory item counts for a specific blockhead."""
+        uuid_variants = [player_uuid, player_uuid.replace('-', '')]
+        suffix = f'_blockhead_{blockhead_id}_inventory'.encode('utf-8')
+        try:
+            with self._read_txn() as (txn, main_db):
+                for uuid_variant in uuid_variants:
+                    key = uuid_variant.encode('utf-8') + suffix
+                    value = txn.get(key, db=main_db)
+                    if value:
+                        return parse_inventory_plist(value)
+        except Exception as e:
+            print(f'[WorldManager] get_blockhead_inventory_counts error for blockhead {blockhead_id}: {e}')
+        return {}
 
     # -----------------------------------------------------------------------
     # Public API — owner lookup

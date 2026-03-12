@@ -1,6 +1,5 @@
 import { MessageBot } from '@bhmb/bot'
 import { join } from 'path'
-import { spawn } from 'child_process'
 import { config } from '../../config'
 import { enqueueShared } from '../../shared-queue'
 import * as BlockheadService from '../../blockhead-service'
@@ -109,56 +108,7 @@ MessageBot.registerExtension('teleport-system', (ex) => {
   const WILD_COST = config.economy.wildCost
 
   const findWildLocation = (): Promise<{ success: boolean, x?: number, y?: number, error?: string }> => {
-    return new Promise((resolve) => {
-      const args = [
-        config.paths.wildLocations,
-        '--find-location',
-        '--save-path', config.paths.worldSave,
-        '--min-y', String(config.economy.wildMinY),
-        '--max-y', String(config.economy.wildMaxY),
-        '--spawn-x', String(config.game.spawn.x),
-        '--min-spawn-distance', String(config.economy.wildMinSpawnDistance),
-      ]
-      const proc = spawn(config.paths.python, args, { stdio: ['ignore', 'pipe', 'pipe'] })
-      let stdout = ''
-      let stderr = ''
-      let resolved = false
-
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true
-          proc.kill('SIGKILL')
-          console.warn('[/wild] Timed out finding location')
-          resolve({ success: false, error: 'Timeout finding location' })
-        }
-      }, 30000)
-
-      proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
-      proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-      proc.on('close', code => {
-        if (resolved) return
-        resolved = true
-        clearTimeout(timeout)
-        if (code !== 0) {
-          console.error(`[/wild] Python script exited with code ${code}: ${stderr}`)
-          resolve({ success: false, error: stderr || 'Script failed' })
-          return
-        }
-        try {
-          resolve(JSON.parse(stdout.trim()))
-        } catch (e) {
-          console.error(`[/wild] Failed to parse response: ${stdout}`)
-          resolve({ success: false, error: 'Invalid response' })
-        }
-      })
-      proc.on('error', (err: Error) => {
-        if (resolved) return
-        resolved = true
-        clearTimeout(timeout)
-        console.error(`[/wild] Failed to spawn Python script:`, err)
-        resolve({ success: false, error: String(err) })
-      })
-    })
+    return BlockheadService.findWildLocation()
   }
 
   const executeWild = async (playerName: string, blockheadId: number, playerUuid: string, wildResult: { x: number, y: number }) => {

@@ -1,36 +1,21 @@
 /**
- * This file allows communication between the bot process and the python LMDB tool
- * Blockhead service: per-operation Python spawns via execFileAsync.
+ * Communicates with the WorldManager UDS daemon (tools/uds_daemon.py).
  *
- * Each call spawns world_manager.py or inventory_reader.py for the specific
- * operation needed. LMDB is opened fresh per spawn — no stale data risk.
+ * The daemon keeps LMDB open persistently — each operation is ~1-5ms
+ * vs ~100-400ms for the old Python spawn approach.
  *
- * Latency: ~80-150ms per spawn (Python startup). Acceptable because:
- * - Inventory polling: 15s interval — 80ms is invisible
- * - Give/take/teleport: player is kicked first (~3s before reconnect)
- * - Position/blockhead lookups: called once per TPA/join event
+ * Start the daemon before the bot:
+ *   python3 tools/uds_daemon.py <save_path>
  */
 
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-import * as path from 'path'
+import { getWMClient } from './wm-client'
 import { config } from './config'
 
-const execFileAsync = promisify(execFile)
-
-// In-memory cache: skip LMDB spawn when we already know the mapping
+// In-memory cache: skip LMDB lookup when we already know the mapping
 const playerToBlockheads = new Map<string, Set<number>>()
 const blockheadToPlayer = new Map<number, string>()
 
-const runScript = (script: string, args: string[]): ReturnType<typeof execFileAsync> => {
-  return execFileAsync(config.paths.python, [script, '--save-path', config.paths.worldSave, ...args], {
-    timeout: 30000,
-    maxBuffer: 4 * 1024 * 1024,
-  })
-}
-
-const wm = (args: string[]) => runScript(config.paths.worldManager, args)
-const ir = (args: string[]) => runScript(config.paths.inventoryReader, args)
+const wm = () => getWMClient()
 
 /**
  * Get all blockhead IDs for a player UUID.
@@ -40,9 +25,8 @@ export const getBlockheadsForPlayer = async (playerUuid: string): Promise<number
   if (cached) return Array.from(cached)
 
   try {
-    const { stdout } = await ir(['--list-blockheads', '--player-uuid', playerUuid])
-    const result = JSON.parse(stdout.toString().trim())
-    const ids: number[] = result.blockheadIds || []
+    const resp = await wm().send('list_blockheads', { playerUuid })
+    const ids: number[] = (resp.blockheadIds as number[]) || []
 
     playerToBlockheads.set(playerUuid, new Set(ids))
     for (const id of ids) blockheadToPlayer.set(id, playerUuid)
@@ -56,13 +40,11 @@ export const getBlockheadsForPlayer = async (playerUuid: string): Promise<number
 
 /**
  * Get blockhead IDs and in-game character names for a player UUID.
- * Reads the {uuid}_blockheads LMDB key (separate from inventory keys).
  */
 export const getBlockheadNames = async (playerUuid: string): Promise<{ blockheadId: number, name: string }[]> => {
   try {
-    const { stdout } = await wm(['--list-blockheads-with-names', '--player-uuid', playerUuid])
-    const result = JSON.parse(stdout.toString().trim())
-    return result.blockheads || []
+    const resp = await wm().send('list_blockheads_with_names', { playerUuid })
+    return (resp.blockheads as { blockheadId: number, name: string }[]) || []
   } catch (err) {
     console.error('[BlockheadService] getBlockheadNames failed:', err)
     return []
@@ -71,17 +53,11 @@ export const getBlockheadNames = async (playerUuid: string): Promise<{ blockhead
 
 /**
  * Get inventory counts for a specific blockhead.
- * playerUuid is required for direct key lookup (O(log n) vs O(n) scan).
  */
 export const getInventoryCounts = async (blockheadId: number, playerUuid: string): Promise<Record<number, number> | null> => {
   try {
-    const { stdout } = await ir([
-      '--blockhead-inventory-counts',
-      '--blockhead-id', String(blockheadId),
-      '--player-uuid', playerUuid,
-    ])
-    const result = JSON.parse(stdout.toString().trim())
-    return result.items ?? null
+    const resp = await wm().send('blockhead_inventory_counts', { blockheadId, playerUuid })
+    return (resp.items as Record<number, number>) ?? null
   } catch (err) {
     console.error('[BlockheadService] getInventoryCounts failed:', err)
     return null
@@ -93,9 +69,8 @@ export const getInventoryCounts = async (blockheadId: number, playerUuid: string
  */
 export const getPlayerInventoryCounts = async (playerUuid: string): Promise<Record<number, number>> => {
   try {
-    const { stdout } = await ir(['--inventory-counts', '--player-uuid', playerUuid])
-    const result = JSON.parse(stdout.toString().trim())
-    return result.items || {}
+    const resp = await wm().send('inventory_counts', { playerUuid })
+    return (resp.items as Record<number, number>) || {}
   } catch (err) {
     console.error('[BlockheadService] getPlayerInventoryCounts failed:', err)
     return {}
@@ -113,17 +88,8 @@ export const giveItem = async (
   basketOnly = false
 ): Promise<{ ok: boolean, error?: string }> => {
   try {
-    const args = [
-      '--give-item',
-      '--blockhead-id', String(blockheadId),
-      '--item-id', String(itemId),
-      '--count', String(count),
-    ]
-    if (playerUuid) args.push('--player-uuid', playerUuid)
-    if (basketOnly) args.push('--basket-only')
-    const { stdout } = await wm(args)
-    const result = JSON.parse(stdout.toString().trim())
-    return { ok: result.ok === true, error: result.error }
+    const resp = await wm().send('give_item', { blockheadId, itemId, count, playerUuid, basketOnly })
+    return { ok: resp.ok === true, error: resp.error as string | undefined }
   } catch (err) {
     console.error('[BlockheadService] giveItem failed:', err)
     return { ok: false, error: String(err) }
@@ -140,16 +106,8 @@ export const takeItem = async (
   playerUuid?: string
 ): Promise<{ success: boolean, taken?: number, error?: string }> => {
   try {
-    const args = [
-      '--take-item',
-      '--blockhead-id', String(blockheadId),
-      '--item-id', String(itemId),
-      '--count', String(count),
-    ]
-    if (playerUuid) args.push('--player-uuid', playerUuid)
-    const { stdout } = await wm(args)
-    const result = JSON.parse(stdout.toString().trim())
-    return { success: result.success === true, taken: result.taken, error: result.error }
+    const resp = await wm().send('take_item', { blockheadId, itemId, count, playerUuid })
+    return { success: resp.success === true, taken: resp.taken as number | undefined, error: resp.error as string | undefined }
   } catch (err) {
     console.error('[BlockheadService] takeItem failed:', err)
     return { success: false, error: String(err) }
@@ -166,16 +124,8 @@ export const applyQuestItems = async (
   playerUuid?: string
 ): Promise<{ success: boolean, error?: string }> => {
   try {
-    const args = [
-      '--apply-quest-items',
-      '--blockhead-id', String(blockheadId),
-      '--remove-items-json', JSON.stringify(removeItems),
-      '--give-items-json', JSON.stringify(giveItems),
-    ]
-    if (playerUuid) args.push('--player-uuid', playerUuid)
-    const { stdout } = await wm(args)
-    const result = JSON.parse(stdout.toString().trim())
-    return { success: result.success === true, error: result.error }
+    const resp = await wm().send('apply_quest_items', { blockheadId, removeItems, giveItems, playerUuid })
+    return { success: resp.success === true, error: resp.error as string | undefined }
   } catch (err) {
     console.error('[BlockheadService] applyQuestItems failed:', err)
     return { success: false, error: String(err) }
@@ -192,16 +142,8 @@ export const teleportBlockhead = async (
   playerUuid?: string
 ): Promise<{ ok: boolean, error?: string }> => {
   try {
-    const args = [
-      '--teleport-blockhead',
-      '--blockhead-id', String(blockheadId),
-      '--x', String(x),
-      '--y', String(y),
-    ]
-    if (playerUuid) args.push('--player-uuid', playerUuid)
-    const { stdout } = await wm(args)
-    const result = JSON.parse(stdout.toString().trim())
-    return { ok: result.ok === true, error: result.error }
+    const resp = await wm().send('teleport_blockhead', { blockheadId, x, y, playerUuid })
+    return { ok: resp.ok === true, error: resp.error as string | undefined }
   } catch (err) {
     console.error('[BlockheadService] teleportBlockhead failed:', err)
     return { ok: false, error: String(err) }
@@ -216,13 +158,8 @@ export const getBlockheadPosition = async (
   playerUuid: string
 ): Promise<{ ok: boolean, x?: number, y?: number, error?: string }> => {
   try {
-    const { stdout } = await wm([
-      '--get-blockhead-position',
-      '--blockhead-id', String(blockheadId),
-      '--player-uuid', playerUuid,
-    ])
-    const result = JSON.parse(stdout.toString().trim())
-    return { ok: result.ok === true, x: result.x, y: result.y, error: result.error }
+    const resp = await wm().send('get_blockhead_position', { blockheadId, playerUuid })
+    return { ok: resp.ok === true, x: resp.x as number | undefined, y: resp.y as number | undefined, error: resp.error as string | undefined }
   } catch (err) {
     console.error('[BlockheadService] getBlockheadPosition failed:', err)
     return { ok: false, error: String(err) }
@@ -230,27 +167,42 @@ export const getBlockheadPosition = async (
 }
 
 /**
+ * Find a random wild teleport location (tree not near any protection sign).
+ * Parameters are read from config.json — edit economy/game.spawn there to change them.
+ */
+export const findWildLocation = async (): Promise<{ success: boolean, x?: number, y?: number, error?: string }> => {
+  try {
+    const resp = await wm().send('find_wild_location', {
+      minY: config.economy.wildMinY,
+      maxY: config.economy.wildMaxY,
+      spawnX: config.game.spawn.x,
+      minSpawnDistance: config.economy.wildMinSpawnDistance,
+    })
+    return {
+      success: resp.success === true,
+      x: resp.x as number | undefined,
+      y: resp.y as number | undefined,
+      error: resp.error as string | undefined,
+    }
+  } catch (err) {
+    console.error('[BlockheadService] findWildLocation failed:', err)
+    return { success: false, error: String(err) }
+  }
+}
+
+/**
  * Fast owner lookup for a blockhead using candidate player UUIDs.
- * Uses direct LMDB key existence checks without full scans.
  */
 export const findOwnerForBlockheadFast = async (blockheadId: number, candidateUuids: string[]): Promise<string | null> => {
   try {
     if (!candidateUuids || candidateUuids.length === 0) return null
 
-    const lookupScript = path.join(path.dirname(config.paths.worldManager), 'fast_owner_lookup.py')
-    const { stdout } = await execFileAsync(config.paths.python, [
-      lookupScript,
-      '--save-path', config.paths.worldSave,
-      '--blockhead-id', String(blockheadId),
-      '--candidate-uuids-json', JSON.stringify(candidateUuids),
-    ], { timeout: 8000, maxBuffer: 1024 * 1024 })
+    const resp = await wm().send('find_owner', { blockheadId, candidateUuids })
+    const playerUuid = resp.playerUuid as string | null
 
-    const output = stdout.toString().trim().split('\n').pop() ?? ''
-    const response = output ? JSON.parse(output) : {}
-
-    if (response?.playerUuid) {
-      blockheadToPlayer.set(blockheadId, response.playerUuid)
-      return response.playerUuid
+    if (playerUuid) {
+      blockheadToPlayer.set(blockheadId, playerUuid)
+      return playerUuid
     }
     return null
   } catch (err) {

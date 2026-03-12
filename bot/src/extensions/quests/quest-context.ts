@@ -34,10 +34,6 @@ export interface PendingReward {
 
 export const QUEST_DATA_PATH = join(config.paths.dataDir, 'quest-progress.json')
 export const PENDING_REWARDS_PATH = join(config.paths.dataDir, 'pending-rewards.json')
-export const WORLD_SAVE_PATH = config.paths.worldSave
-export const PYTHON_PATH = config.paths.python
-export const REWARD_SCRIPT = config.paths.worldManager
-export const FAST_INVENTORY_SCRIPT = config.paths.inventoryReader
 export const SHUTDOWN_FLAG_PATH = join(config.paths.dataDir, '.bot-shutdown-pending')
 export const BACKUP_DIR = join(config.paths.dataDir, 'backups')
 
@@ -100,6 +96,7 @@ export interface QuestContext {
   recentRewardFailures: Map<string, number>
   completionInFlight: Set<string>
   playerLastActivity: Map<string, number>
+  pendingKickDialogue: Map<string, string[]>
 
   // Quest data (prebuilt)
   questById: Map<string, Quest>
@@ -146,6 +143,7 @@ export function createQuestContext(ex: any): QuestContext {
     recentRewardFailures: new Map(),
     completionInFlight: new Set(),
     playerLastActivity: new Map(),
+    pendingKickDialogue: new Map(),
 
     questById,
     firstQuestId: QUESTS.length > 0 ? QUESTS[0].id : null,

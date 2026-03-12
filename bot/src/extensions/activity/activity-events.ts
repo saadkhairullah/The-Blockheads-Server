@@ -1,4 +1,4 @@
-import { getUDSClient } from '../../uds-client'
+import { eventDispatcher } from '../../event-dispatcher'
 import * as BlockheadService from '../../blockhead-service'
 import {
   resolveEventPlayer, resolveOwnerFromMappings, resolveOwnerWithRefresh,
@@ -266,9 +266,6 @@ const resolveUnknownBlockhead = (ctx: ActivityContext, bhId: number) => {
 // ============================================================================
 
 export const startWatching = (ctx: ActivityContext, bot: any) => {
-  const uds = getUDSClient()
-  uds.on('event', (event: any) => {
-    processEvent(ctx, bot, event as ActivityEvent)
-  })
+  eventDispatcher.subscribeAll((event) => processEvent(ctx, bot, event))
   if (LOG_BOT_DEBUG) console.log('[Activity Monitor] Subscribed to UDS events')
 }

@@ -18,14 +18,36 @@ process.on('SIGUSR2', () => {
 })
 
 const { Api, getWorlds, watchChat, watchCommandEvents, setMessageCallback, setJoinCallback, setLeaveCallback } = require('./linux-api')
-const fetchLib = require('fetch-cookie/node-fetch')(require('node-fetch'))
+const fetchLib = require('fetch-cookie').default(require('node-fetch'))
 const { MessageBot } = require('@bhmb/bot')
-require('@bhmb/server')
+const { spawn } = require('child_process')
+const { eventDispatcher } = require('./event-dispatcher')
+const { getWMClient } = require('./wm-client')
 
 // Load admin list once before extensions initialize
 const { loadAdminList, watchAdminList } = require('./extensions/helpers/isAdmin')
 loadAdminList()
 watchAdminList()
+
+// Spawn WorldManager daemon — restarts automatically if it crashes
+const daemonScript = path.join(__dirname, '..', '..', 'tools', 'uds_daemon.py')
+function spawnDaemon() {
+  const daemon = spawn(config.paths.python, [daemonScript, config.paths.worldSave], {
+    stdio: ['ignore', 'inherit', 'inherit'],
+  })
+  daemon.on('exit', (code: number | null) => {
+    console.warn(`[WM Daemon] Exited with code ${code}, restarting in 2s...`)
+    setTimeout(spawnDaemon, 2000)
+  })
+  console.log('[WM Daemon] Started')
+}
+spawnDaemon()
+
+// Give daemon 500ms to bind the socket before connecting
+setTimeout(() => {
+  getWMClient()           // connect to WorldManager daemon
+  eventDispatcher.start() // subscribe to UDS game events
+}, 500)
 
 require('./extensions/server-messages')
 require('./extensions/virtual-bank')
@@ -64,7 +86,6 @@ setLeaveCallback((player : any) => {
   worldAny._events.onLeave.dispatch(player)
 })
 
-bot.addExtension('@bhmb/server')
 bot.addExtension('server-messages')
 bot.addExtension('virtual-bank')
 bot.addExtension('activity-monitor')

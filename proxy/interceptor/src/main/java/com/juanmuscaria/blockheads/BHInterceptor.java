@@ -56,6 +56,10 @@ public class BHInterceptor implements Runnable {
   private boolean forwardData;
   @Option(names = {"--max-clients", "-M"}, description = "Maximum number of concurrent clients", defaultValue = "32")
   private int maxClients;
+  @Option(names = {"--private-messages-file"}, description = "Path to private messages JSONL file", defaultValue = "private_messages.jsonl")
+  private String privateMessagesFile;
+  @Option(names = {"--command-events-file"}, description = "Path to command events JSONL file", defaultValue = "command_events.jsonl")
+  private String commandEventsFile;
 
   // Maps client peer address to their server connection info
   private final Map<Long, ClientConnection> clientConnections = new ConcurrentHashMap<>();
@@ -108,7 +112,7 @@ public class BHInterceptor implements Runnable {
     // We don't need any fancy memory sharing here, create a confined allocator
     try (Arena allocator = Arena.ofConfined()) {
       MemorySegment proxyServer = null;
-      var chatHandler = new ChatCommandHandler();
+      var chatHandler = new ChatCommandHandler(commandEventsFile);
 
       try {
         var proxyAddress = ENetAddress.allocate(allocator);
@@ -136,7 +140,7 @@ public class BHInterceptor implements Runnable {
         var event = ENetEvent.allocate(allocator);
 
         // Start private message file watcher
-        privateMessageWatcher = new PrivateMessageWatcher(System.getProperty("bh.privateMessagesFile", "private_messages.jsonl"));
+        privateMessageWatcher = new PrivateMessageWatcher(privateMessagesFile);
         privateMessageWatcher.start();
 
         // Start UDS event server

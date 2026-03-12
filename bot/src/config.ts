@@ -16,8 +16,6 @@ export interface AppConfig {
   paths: {
     worldSave: string
     python: string
-    worldManager: string
-    inventoryReader: string
     wildLocations: string
     privateMessages: string
     commandEvents: string
@@ -122,8 +120,6 @@ export const config: AppConfig = {
   paths: {
     worldSave: resolvePath(envOr('BH_WORLD_SAVE_PATH', parsed.paths?.worldSave ?? '')),
     python: envOr('BH_PYTHON_PATH', parsed.paths?.python ?? 'python3'),
-    worldManager: resolvePath(envOr('BH_WORLD_MANAGER_PATH', parsed.paths?.worldManager ?? './tools/world_manager.py')),
-    inventoryReader: resolvePath(envOr('BH_INVENTORY_READER_PATH', parsed.paths?.inventoryReader ?? './tools/inventory_reader.py')),
     wildLocations: resolvePath(envOr('BH_WILD_LOCATIONS_PATH', parsed.paths?.wildLocations ?? './tools/wild_locations.py')),
     privateMessages: resolvePath(envOr('BH_PRIVATE_MSG_PATH', parsed.paths?.privateMessages ?? './data/private_messages.jsonl')),
     commandEvents: resolvePath(envOr('BH_COMMAND_EVENTS_PATH', parsed.paths?.commandEvents ?? './data/command_events.jsonl')),

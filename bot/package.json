@@ -8,19 +8,16 @@
   "dependencies": {
     "@bhmb/bot": "^7.0.7",
     "@bhmb/messages": "^1.0.6",
-    "@bhmb/server": "^0.0.2",
-    "fetch-cookie": "^0.7.0",
-    "node-fetch": "^1.7.3"
+    "fetch-cookie": "^3.2.0",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "@types/node": "18",
-    "patch-package": "^8.0.0",
     "typescript": "5"
   },
   "scripts": {
     "build": "tsc",
     "mac": "node build/mac.js",
-    "clean": "rm -rf build",
-    "postinstall": "patch-package"
+    "clean": "rm -rf build"
   }
 }

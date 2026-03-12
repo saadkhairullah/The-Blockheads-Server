@@ -1,10 +1,8 @@
-import { spawn } from 'child_process'
 import * as BlockheadService from '../../blockhead-service'
 import {
   QuestContext, InventoryCache,
   INVENTORY_POLL_INTERVAL, MAX_INVENTORY_CACHE,
-  INVENTORY_INACTIVITY_MS, FAST_INVENTORY_SCRIPT,
-  PYTHON_PATH, WORLD_SAVE_PATH,
+  INVENTORY_INACTIVITY_MS,
   LOG_QUEST_CACHE, LOG_BOT_DEBUG,
 } from './quest-context'
 import { getKnownBlockheadsForPlayer } from './quest-resolver'
@@ -53,61 +51,6 @@ export const getPlayerInventoryCountsAny = async (playerUuid: string): Promise<{
   }
 }
 
-type BatchBlockhead = { blockheadId: number; items: { [itemId: string]: number } }
-type BatchEntry = { playerUuid: string; blockheads: BatchBlockhead[] }
-
-export const getBatchInventoryCounts = (playerUuids: string[]): Promise<Map<string, BatchEntry>> => {
-  return new Promise((resolve) => {
-    if (playerUuids.length === 0) {
-      resolve(new Map())
-      return
-    }
-    const args = [
-      FAST_INVENTORY_SCRIPT,
-      '--inventory-counts-batch',
-      '--save-path', WORLD_SAVE_PATH,
-      '--player-uuids-json', JSON.stringify(playerUuids),
-    ]
-    const proc = spawn(PYTHON_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'] })
-    let stdout = ''
-    let finished = false
-
-    const timeout = setTimeout(() => {
-      if (!finished) {
-        finished = true
-        console.warn('[Quest System] Inventory batch timeout, killing process')
-        proc.kill('SIGKILL')
-        resolve(new Map())
-      }
-    }, 30000)
-
-    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
-    proc.on('close', (code: number | null) => {
-      if (finished) return
-      finished = true
-      clearTimeout(timeout)
-      if (code !== 0) {
-        resolve(new Map())
-        return
-      }
-      try {
-        const parsed = JSON.parse(stdout.trim())
-        const map = new Map<string, BatchEntry>()
-        if (parsed && Array.isArray(parsed.players)) {
-          for (const entry of parsed.players) {
-            if (!entry || typeof entry.playerUuid !== 'string') continue
-            const blockheads = Array.isArray(entry.blockheads) ? entry.blockheads : []
-            map.set(entry.playerUuid, { playerUuid: entry.playerUuid, blockheads })
-          }
-        }
-        resolve(map)
-      } catch {
-        resolve(new Map())
-      }
-    })
-  })
-}
-
 export const pollOnlinePlayerInventories = async (ctx: QuestContext) => {
   if (inventoryPollInProgress) {
     console.warn('[Quest System] Skipping poll - previous poll still in progress')
@@ -119,67 +62,31 @@ export const pollOnlinePlayerInventories = async (ctx: QuestContext) => {
     const now = Date.now()
     const activePlayers = Array.from(ctx.onlinePlayers).filter(name => {
       const lastActive = ctx.playerLastActivity.get(name)
-      if (lastActive && (now - lastActive) > INVENTORY_INACTIVITY_MS) {
-        return false
-      }
-      return true
+      return !(lastActive && (now - lastActive) > INVENTORY_INACTIVITY_MS)
     })
 
     if (activePlayers.length === 0) return
 
-    const uuidList: string[] = []
-    const playerByUuid = new Map<string, string>()
-    for (const name of activePlayers) {
-      const uuid = ctx.playerToUuid.get(name)
-      if (!uuid) continue
-      uuidList.push(uuid)
-      playerByUuid.set(uuid, name)
-    }
+    await Promise.all(activePlayers.map(async (playerName) => {
+      const uuid = ctx.playerToUuid.get(playerName)
+      if (!uuid) return
 
-    if (uuidList.length === 0) return
-
-    const batch = await getBatchInventoryCounts(uuidList)
-    for (const uuid of uuidList) {
-      const playerName = playerByUuid.get(uuid)
-      if (!playerName) continue
-      if (!ctx.onlinePlayers.has(playerName)) continue
-      const entry = batch.get(uuid)
-      if (!entry || !entry.blockheads || entry.blockheads.length === 0) continue
-
-      let cacheBlockheadId = -1
-      let cacheItems: { [itemId: string]: number } = {}
-
-      if (entry.blockheads.length === 1) {
-        cacheBlockheadId = typeof entry.blockheads[0].blockheadId === 'number' ? entry.blockheads[0].blockheadId : -1
-        cacheItems = entry.blockheads[0].items ?? {}
-      } else {
-        const merged: { [itemId: string]: number } = {}
-        for (const bh of entry.blockheads) {
-          if (!bh || !bh.items) continue
-          for (const [itemId, count] of Object.entries(bh.items)) {
-            const numCount = typeof count === 'number' ? count : 0
-            if (numCount > 0) {
-              merged[itemId] = (merged[itemId] ?? 0) + numCount
-            }
-          }
-        }
-        cacheItems = merged
-        cacheBlockheadId = -1
-      }
+      const counts = await BlockheadService.getPlayerInventoryCounts(uuid)
+      if (!counts || Object.keys(counts).length === 0) return
+      if (!ctx.onlinePlayers.has(playerName)) return
 
       setInventoryCacheEntry(ctx, playerName, {
-        items: cacheItems,
+        items: counts as { [itemId: string]: number },
         lastUpdated: Date.now(),
-        blockheadId: cacheBlockheadId
+        blockheadId: -1,
       })
 
-      if (LOG_QUEST_CACHE) {
-        const label = cacheBlockheadId >= 0 ? `(blockhead ${cacheBlockheadId})` : '(all blockheads)'
-        if (LOG_BOT_DEBUG) console.log(`[Quest System] ${playerName} inventory cached ${label}`)
+      if (LOG_QUEST_CACHE && LOG_BOT_DEBUG) {
+        console.log(`[Quest System] ${playerName} inventory cached`)
       }
 
       ctx.checkQuestCompletion(playerName)
-    }
+    }))
   } finally {
     inventoryPollInProgress = false
   }

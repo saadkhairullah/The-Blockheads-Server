@@ -1,13 +1,12 @@
 import { readFile, appendFile, writeFile } from 'fs/promises'
-import { spawn } from 'child_process'
 import { enqueueShared } from '../../shared-queue'
+import * as BlockheadService from '../../blockhead-service'
 import { normalizePlayerName, resolveOwnerFromMappings, resolveEventPlayer } from '../helpers/blockhead-mapping'
 import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
 import { ActivityEvent } from '../types/shared-types'
 import {
   ActivityContext, LOG_BOT_DEBUG, MAX_PENDING_UUIDS,
   FORBIDDEN_ITEM_IDS, SUSPICIOUS_LOG_PATH, PORTAL_CHEST_BUYERS_PATH,
-  FAST_INVENTORY_SCRIPT, WORLD_SAVE_PATH, PYTHON_PATH,
   pruneMap, sleep,
 } from './activity-context'
 
@@ -93,46 +92,10 @@ const unbanForForbidden = (ctx: ActivityContext, playerName: string, itemId: num
   ctx.bot.send(`/unban ${name}`)
 }
 
-const getBlockheadItemCount = (playerUuid: string, blockheadId: number, _itemId: number): Promise<number | null> => {
-  return new Promise((resolve) => {
-    const args = [
-      FAST_INVENTORY_SCRIPT,
-      '--blockhead-inventory-counts',
-      '--save-path', WORLD_SAVE_PATH,
-      '--player-uuid', playerUuid,
-      '--blockhead-id', String(blockheadId),
-    ]
-    const proc = spawn(PYTHON_PATH, args, { stdio: ['ignore', 'pipe', 'pipe'] })
-    let stdout = ''
-    let resolved = false
-
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true
-        proc.kill('SIGKILL')
-        console.warn(`[Activity Monitor] getBlockheadItemCount timed out for blockhead ${blockheadId}`)
-        resolve(null)
-      }
-    }, 30000)
-
-    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
-    proc.on('close', (code: number | null) => {
-      if (resolved) return
-      resolved = true
-      clearTimeout(timeout)
-      if (code !== 0) {
-        resolve(null)
-        return
-      }
-      try {
-        const parsed = JSON.parse(stdout.trim())
-        const count = parsed?.items?.[String(_itemId)]
-        resolve(typeof count === 'number' ? count : 0)
-      } catch {
-        resolve(null)
-      }
-    })
-  })
+const getBlockheadItemCount = async (playerUuid: string, blockheadId: number, itemId: number): Promise<number | null> => {
+  const counts = await BlockheadService.getInventoryCounts(blockheadId, playerUuid)
+  if (!counts) return null
+  return counts[itemId] ?? 0
 }
 
 const resolveBlockheadForRemoval = async (ctx: ActivityContext, playerName: string, eventBlockheadId: number | undefined, itemId: number): Promise<number | null> => {

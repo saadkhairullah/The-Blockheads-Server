@@ -6,7 +6,7 @@ import { setKillCallback } from '../linux-api'
 import { createQuestContext } from './quests/quest-context'
 import { loadQuestProgress, loadPendingRewards, saveQuestProgress, savePendingRewards, startAutoSave, stopAutoSave, getPlayerProgress } from './quests/quest-persistence'
 import { getInventoryCount, hasFreshInventory, startInventoryPolling, stopInventoryPolling } from './quests/quest-inventory'
-import { checkQuestCompletion, isPlayerCurrentlyAtLocation } from './quests/quest-completion'
+import { checkQuestCompletion, isPlayerCurrentlyAtLocation, sendDialogue } from './quests/quest-completion'
 import { registerQuestCommands } from './quests/quest-commands'
 import { startWatching, cleanupEventState } from './quests/quest-events'
 import { processKillEvent } from './quests/quest-kills'
@@ -162,6 +162,13 @@ MessageBot.registerExtension('quest-system', (ex) => {
       }).catch(err => {
         console.error(`[Quest System] Background blockhead lookup failed for ${playerName}:`, err)
       })
+    }
+
+    // Drain any dialogue queued from a kick-based quest completion
+    const pendingLines = ctx.pendingKickDialogue.get(playerName)
+    if (pendingLines) {
+      ctx.pendingKickDialogue.delete(playerName)
+      setTimeout(() => sendDialogue(playerName, pendingLines), 5000)
     }
 
     // Delay inventory fetch until the player moves

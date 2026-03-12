@@ -1,6 +1,6 @@
 import { QuestContext, LOG_BOT_DEBUG, FAILED_LOOKUP_COOLDOWN } from './quest-context'
 import { ActivityEvent } from '../types/shared-types'
-import { getUDSClient } from '../../uds-client'
+import { eventDispatcher } from '../../event-dispatcher'
 import { resolveEventPlayer, sharedMappingState, listAndMapBlockheads, attachBlockheadsToUuid } from '../helpers/blockhead-mapping'
 import { trackBlockheadOwner } from './quest-resolver'
 import { checkTravelProgress } from './quest-completion'
@@ -128,10 +128,7 @@ export const processEvent = (ctx: QuestContext, event: ActivityEvent) => {
 }
 
 export const startWatching = (ctx: QuestContext) => {
-  const uds = getUDSClient()
-  uds.on('event', (event: any) => {
-    processEvent(ctx, event as ActivityEvent)
-  })
+  eventDispatcher.subscribeAll((event) => processEvent(ctx, event))
   if (LOG_BOT_DEBUG) console.log('[Quest System] Subscribed to UDS events')
 }
 
