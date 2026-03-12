@@ -27,8 +27,6 @@ const { loadAdminList, watchAdminList } = require('./extensions/helpers/isAdmin'
 loadAdminList()
 watchAdminList()
 
-const extensions = require('./extensions')
-require('./extensions')
 require('./extensions/server-messages')
 require('./extensions/virtual-bank')
 require('./extensions/activity-monitor')
@@ -66,8 +64,6 @@ setLeaveCallback((player : any) => {
   worldAny._events.onLeave.dispatch(player)
 })
 
-bot.addExtension('extensions');
-(bot.getExports('extensions') as typeof extensions.ExtensionsExports).env = 'mac'
 bot.addExtension('@bhmb/server')
 bot.addExtension('server-messages')
 bot.addExtension('virtual-bank')
