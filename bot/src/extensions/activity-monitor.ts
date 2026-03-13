@@ -326,17 +326,20 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
       return p.trackedBlockheadId
     }
 
-    // Fall back to most recently active by coords time
+    // Fall back to most recently active by coords time, ignoring stale blockheads
+    const ACTIVE_WINDOW_MS = 120000
     let bestId: number | null = null
     let bestTime = -1
     for (const [id, bh] of p.blockheads.entries()) {
       if (!bh.lastCoords) continue
+      if (Date.now() - bh.lastCoords.time > ACTIVE_WINDOW_MS) continue
       if (bh.lastCoords.time > bestTime) {
         bestTime = bh.lastCoords.time
         bestId = id
       }
     }
-    return bestId
+    // If no blockhead moved recently, fall back to lastBlockheadId
+    return bestId ?? p.lastBlockheadId ?? null
   }
 
   ex.exports = {
@@ -345,10 +348,6 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
     getBlockheadsForPlayer,
     getMostRecentBlockheadId,
     getPlayerUuid,
-    getLatestCoords: (playerName: string) => {
-      const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
-      return p?.mostRecentCoords ?? null
-    },
   }
 
   ex.remove = () => {

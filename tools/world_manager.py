@@ -6,10 +6,9 @@ Complete Blockheads World Manager:
 - Edit and save to new folder using GameSave
 
 Sub-modules:
-  item_utils.py         — Item creation and basket/chest slot manipulation
-  world_settings.py     — worldv2 read/write (expert mode, portal level)
-  inventory_ops.py      — Inventory queries (counts, space checks, clear)
-  targeted_lmdb_ops.py  — Targeted LMDB writes (give, take, teleport, quest items)
+  item_utils.py           — Item creation and basket/chest slot manipulation
+  world_settings.py       — worldv2 read/write (expert mode, portal level)
+  world_manager_service.py — WorldManager class (give, take, teleport, quest items)
 """
 
 import json
@@ -18,14 +17,7 @@ from gameSave import GameSave
 from item import Item
 from item_utils import get_basket_slots, get_slot_item, get_item_name
 from world_settings import get_worldv2
-from targeted_lmdb_ops import (
-    give_item_to_blockhead,
-    take_item_from_blockhead,
-    teleport_blockhead_targeted,
-    apply_quest_items_targeted,
-    get_blockhead_position,
-    list_blockheads_with_names,
-)
+from world_manager_service import WorldManager
 
 SAVE_PATH = None
 OUTPUT_PATH = None
@@ -231,23 +223,27 @@ if __name__ == "__main__":
             raise SystemExit("Missing --blockhead-id")
         if args.item_id is None:
             raise SystemExit("Missing --item-id")
-        ok = give_item_to_blockhead(args.save_path, args.blockhead_id, args.item_id, args.count,
-                                    player_uuid=args.player_uuid, damage=args.damage, color=args.color,
-                                    basket_only=args.basket_only)
-        print(json.dumps({"ok": bool(ok)}))
-        raise SystemExit(0 if ok else 1)
+        with WorldManager(args.save_path) as wm:
+            result = wm.give_item(args.blockhead_id, args.item_id, args.count,
+                                  player_uuid=args.player_uuid, damage=args.damage,
+                                  color=args.color, basket_only=args.basket_only)
+        print(json.dumps(result))
+        raise SystemExit(0 if result.get("ok") else 1)
     if args.take_item:
         if args.blockhead_id is None:
             raise SystemExit("Missing --blockhead-id")
         if args.item_id is None:
             raise SystemExit("Missing --item-id")
-        result = take_item_from_blockhead(args.save_path, args.blockhead_id, args.item_id, args.count, player_uuid=args.player_uuid)
+        with WorldManager(args.save_path) as wm:
+            result = wm.take_item(args.blockhead_id, args.item_id, args.count,
+                                  player_uuid=args.player_uuid)
         print(json.dumps(result))
         raise SystemExit(0 if result.get("success") else 1)
     if args.list_blockheads_with_names:
         if not args.player_uuid:
             raise SystemExit("Missing --player-uuid")
-        result = list_blockheads_with_names(args.save_path, args.player_uuid)
+        with WorldManager(args.save_path) as wm:
+            result = wm.list_blockheads_with_names(args.player_uuid)
         print(json.dumps(result))
         raise SystemExit(0 if result.get("ok") else 1)
     if args.get_blockhead_position:
@@ -255,7 +251,8 @@ if __name__ == "__main__":
             raise SystemExit("Missing --blockhead-id")
         if not args.player_uuid:
             raise SystemExit("Missing --player-uuid")
-        result = get_blockhead_position(args.save_path, args.player_uuid, args.blockhead_id)
+        with WorldManager(args.save_path) as wm:
+            result = wm.get_blockhead_position(args.player_uuid, args.blockhead_id)
         print(json.dumps(result))
         raise SystemExit(0 if result.get("ok") else 1)
     if args.teleport_blockhead:
@@ -265,7 +262,8 @@ if __name__ == "__main__":
             raise SystemExit("Missing --player-uuid")
         if args.x is None or args.y is None:
             raise SystemExit("Missing --x or --y")
-        result = teleport_blockhead_targeted(args.save_path, args.player_uuid, args.blockhead_id, args.x, args.y)
+        with WorldManager(args.save_path) as wm:
+            result = wm.teleport_blockhead(args.player_uuid, args.blockhead_id, args.x, args.y)
         result.pop("_bh_key", None)
         print(json.dumps(result))
         raise SystemExit(0 if result.get("ok") else 1)
@@ -280,7 +278,9 @@ if __name__ == "__main__":
         except Exception:
             print(json.dumps({"success": False, "error": "Invalid --remove-items-json or --give-items-json"}))
             raise SystemExit(1)
-        result = apply_quest_items_targeted(args.save_path, args.blockhead_id, remove_items, give_items, args.player_uuid)
+        with WorldManager(args.save_path) as wm:
+            result = wm.apply_quest_items(args.blockhead_id, remove_items, give_items,
+                                          player_uuid=args.player_uuid)
         print(json.dumps(result))
         raise SystemExit(0 if result.get("success") else 1)
     main()

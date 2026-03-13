@@ -25,8 +25,6 @@ interface ChatMessage {
   message: string
   timestamp: Date
 }
-let chatWatcher: any = null
-let commandWatcher: any = null
 let messageCallback: ((msg: ChatMessage) => void) | null = null
 let joinCallback: ((player: { name: string; id: string }) => void) | null = null
 let leaveCallback: ((player: { name: string; id: string }) => void) | null = null
@@ -196,7 +194,7 @@ export function watchChat() {
     lastPosition = 0
   })
   
-  chatWatcher = watch(logPath, async (eventType) => {
+  watch(logPath, async (eventType) => {
     if (eventType === 'change') {
       try {
         const content = await readFile(logPath, 'utf8')
@@ -306,7 +304,7 @@ export function watchCommandEvents() {
     lastPosition = 0
   })
 
-  commandWatcher = watch(commandPath, async (eventType) => {
+  watch(commandPath, async (eventType) => {
     if (eventType !== 'change') return
     try {
       const content = await readFile(commandPath, 'utf8')
@@ -363,16 +361,3 @@ export function setKillCallback(callback: (killer: string, victim: string) => vo
   killCallback = callback
 }
 
-export function unwatchChat() {
-  if (chatWatcher) {
-    chatWatcher.close()
-    chatWatcher = null
-  }
-}
-
-export function unwatchCommandEvents() {
-  if (commandWatcher) {
-    commandWatcher.close()
-    commandWatcher = null
-  }
-}
