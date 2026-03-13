@@ -42,6 +42,15 @@ public class PrivateMessageWatcher {
     this.filePath = Path.of(path);
     this.watcherThread = new Thread(this::watchLoop, "private-msg-watcher");
     this.watcherThread.setDaemon(true);
+    // Create the file if it doesn't exist so the watcher never fails on missing file
+    try {
+      Files.createDirectories(filePath.getParent() != null ? filePath.getParent() : Path.of("."));
+      if (!Files.exists(filePath)) {
+        Files.createFile(filePath);
+      }
+    } catch (IOException e) {
+      logger.warn("Could not create private messages file at {}: {}", filePath, e.getMessage());
+    }
   }
 
   public void start() {

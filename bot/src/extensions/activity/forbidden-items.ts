@@ -1,7 +1,8 @@
 import { readFile, appendFile, writeFile } from 'fs/promises'
 import { enqueueShared } from '../../shared-queue'
 import * as BlockheadService from '../../blockhead-service'
-import { normalizePlayerName, resolveOwnerFromMappings, resolveEventPlayer } from '../helpers/blockhead-mapping'
+import { normalizePlayerName } from '../helpers/blockhead-mapping'
+import { playerManager } from '../helpers/blockhead-mapping'
 import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
 import { ActivityEvent } from '../types/shared-types'
 import {
@@ -98,18 +99,18 @@ const getBlockheadItemCount = async (playerUuid: string, blockheadId: number, it
   return counts[itemId] ?? 0
 }
 
-const resolveBlockheadForRemoval = async (ctx: ActivityContext, playerName: string, eventBlockheadId: number | undefined, itemId: number): Promise<number | null> => {
-  const ids = ctx.playerToBlockheads.get(playerName)
-  if (!ids || ids.size === 0) return null
+const resolveBlockheadForRemoval = async (_ctx: ActivityContext, playerName: string, eventBlockheadId: number | undefined, itemId: number): Promise<number | null> => {
+  const player = playerManager.get(playerName)
+  if (!player || player.blockheads.size === 0) return null
 
-  if (typeof eventBlockheadId === 'number' && ids.has(eventBlockheadId)) {
+  if (typeof eventBlockheadId === 'number' && player.blockheads.has(eventBlockheadId)) {
     return eventBlockheadId
   }
 
-  const playerUuid = ctx.playerToUuid.get(playerName)
+  const playerUuid = player.uuid
   if (!playerUuid) return null
 
-  for (const id of ids) {
+  for (const id of player.blockheads.keys()) {
     const count = await getBlockheadItemCount(playerUuid, id, itemId)
     if (typeof count === 'number' && count > 0) {
       return id
@@ -120,7 +121,7 @@ const resolveBlockheadForRemoval = async (ctx: ActivityContext, playerName: stri
 }
 
 const scheduleRemoval = async (ctx: ActivityContext, playerName: string, itemId: number, itemName: string, count: number, eventBlockheadId?: number): Promise<boolean> => {
-  const playerUuid = ctx.playerToUuid.get(playerName)
+  const playerUuid = playerManager.get(playerName)?.uuid
   const MAX_RETRIES = 3
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
@@ -143,9 +144,9 @@ const scheduleRemoval = async (ctx: ActivityContext, playerName: string, itemId:
       }
       if (LOG_BOT_DEBUG) console.log(`[Activity Monitor] Could not remove item: ${result.error ?? 'unknown error'}`)
 
-      const ids = ctx.playerToBlockheads.get(playerName)
-      if (ids && ids.size > 0) {
-        for (const id of ids) {
+      const player = playerManager.get(playerName)
+      if (player && player.blockheads.size > 0) {
+        for (const id of player.blockheads.keys()) {
           if (id === targetBlockheadId) continue
           if (LOG_BOT_DEBUG) console.log(`[Activity Monitor] Attempting to remove ${count}x ${itemName} from blockhead ${id}`)
           const fallback = await enqueueShared(() => ctx.takeItemFromBlockhead(id, itemId, count, playerUuid))
@@ -230,7 +231,7 @@ export const enforceForbiddenForPlayer = async (
         time: new Date().toISOString(),
         player: playerName,
         itemId, itemName, blockheadId,
-        playerUuid: ctx.playerToUuid.get(playerName),
+        playerUuid: playerManager.get(playerName)?.uuid,
         reason: 'removal_failed_unbanned'
       })
       unbanForForbidden(ctx, playerName, itemId)
@@ -262,11 +263,7 @@ export const queuePendingForbiddenByBlockhead = (ctx: ActivityContext, blockhead
 }
 
 export const drainPendingForbiddenForBlockhead = (ctx: ActivityContext, blockheadId: number) => {
-  const owner = resolveOwnerFromMappings(blockheadId, {
-    playerToBlockheads: ctx.playerToBlockheads,
-    playerToUuid: ctx.playerToUuid,
-    uuidToPlayer: ctx.uuidToPlayer,
-  })
+  const owner = playerManager.getByBlockheadId(blockheadId)?.name
   if (!owner) return
   const pending = ctx.pendingForbiddenByBlockhead.get(blockheadId)
   if (!pending || pending.length === 0) return
@@ -289,16 +286,11 @@ export const handleForbiddenDetected = async (
   blockheadId?: number
 ) => {
   if (!FORBIDDEN_ITEM_IDS.has(itemId)) return
-  const state = {
-    playerToBlockheads: ctx.playerToBlockheads,
-    playerToUuid: ctx.playerToUuid,
-    uuidToPlayer: ctx.uuidToPlayer,
-    blockheadToPlayer: ctx.blockheadToPlayer,
-    blockheadToUuid: ctx.blockheadToUuid,
-    blockheadToOwnerUuid: ctx.blockheadToOwnerUuid,
-  }
-  const playerName = resolveEventPlayer(event, state) ?? resolveOwnerFromMappings(blockheadId, state)
+
+  const playerName = playerManager.resolveEventPlayer(event)
+    ?? (typeof blockheadId === 'number' ? playerManager.getByBlockheadId(blockheadId)?.name ?? null : null)
   const ownerName = playerName ? normalizePlayerName(playerName) : null
+
   if (ownerName && isAllowedForbiddenItems(ctx, ownerName)) {
     if (LOG_BOT_DEBUG) console.log(`[Activity Monitor] ${ownerName} has forbidden item ${itemName} - allowed (admin or purchased)`)
     return
@@ -317,15 +309,8 @@ export const handleForbiddenDetected = async (
 }
 
 export const handleForbiddenCleared = async (ctx: ActivityContext, event: ActivityEvent, itemId: number, blockheadId?: number) => {
-  const state = {
-    playerToBlockheads: ctx.playerToBlockheads,
-    playerToUuid: ctx.playerToUuid,
-    uuidToPlayer: ctx.uuidToPlayer,
-    blockheadToPlayer: ctx.blockheadToPlayer,
-    blockheadToUuid: ctx.blockheadToUuid,
-    blockheadToOwnerUuid: ctx.blockheadToOwnerUuid,
-  }
-  const playerName = resolveEventPlayer(event, state) ?? resolveOwnerFromMappings(blockheadId, state)
+  const playerName = playerManager.resolveEventPlayer(event)
+    ?? (typeof blockheadId === 'number' ? playerManager.getByBlockheadId(blockheadId)?.name ?? null : null)
   if (!playerName) return
   if (isAllowedForbiddenItems(ctx, playerName)) return
 

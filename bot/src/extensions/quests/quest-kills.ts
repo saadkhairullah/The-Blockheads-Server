@@ -1,17 +1,17 @@
 import { QuestContext, ARENA_CENTER_X, ARENA_CENTER_Y, ARENA_RADIUS, LOG_BOT_DEBUG, ACTIVE_BLOCKHEAD_WINDOW_MS } from './quest-context'
 import { getPlayerProgress, getCurrentQuest } from './quest-persistence'
 import { sendPrivateMessage } from '../../private-message'
+import { playerManager } from '../helpers/blockhead-mapping'
 
 /**
  * Check if a player's most recent known position is inside the arena.
- * Uses the same lastCoords map as travel quest detection.
  */
-const isInArena = (ctx: QuestContext, playerName: string): boolean => {
-  const blockheads = ctx.playerToBlockheads.get(playerName)
-  if (!blockheads || blockheads.size === 0) return false
+const isInArena = (_ctx: QuestContext, playerName: string): boolean => {
+  const p = playerManager.get(playerName)
+  if (!p || p.blockheads.size === 0) return false
 
-  for (const bhId of blockheads) {
-    const coords = ctx.lastCoords.get(bhId)
+  for (const [_bhId, bh] of p.blockheads.entries()) {
+    const coords = bh.lastCoords
     if (!coords) continue
     if (Date.now() - coords.time > ACTIVE_BLOCKHEAD_WINDOW_MS) continue
 
@@ -34,7 +34,7 @@ const isInArena = (ctx: QuestContext, playerName: string): boolean => {
 export const processKillEvent = (ctx: QuestContext, killer: string, victim: string) => {
   if (killer === victim) return
 
-  if (!ctx.onlinePlayers.has(killer)) {
+  if (!(playerManager.get(killer)?.isOnline ?? false)) {
     if (LOG_BOT_DEBUG) console.log(`[Kill Quests] Killer ${killer} is not online, ignoring`)
     return
   }

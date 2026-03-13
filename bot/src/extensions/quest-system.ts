@@ -1,5 +1,5 @@
 import { MessageBot } from '@bhmb/bot'
-import { sharedMappingState, pruneMappingCaches, getBlockheadsForUuid, listBlockheadsForPlayerByUuid } from './helpers/blockhead-mapping'
+import { playerManager, listBlockheadsForPlayerByUuid } from './helpers/blockhead-mapping'
 import { setKillCallback } from '../linux-api'
 
 // Sub-modules
@@ -56,9 +56,9 @@ MessageBot.registerExtension('quest-system', (ex) => {
   }
 
   const enqueueJoinBlockheadLookup = (playerName: string, playerUuid: string): Promise<number[]> => {
-    const cached = ctx.playerToBlockheads.get(playerName)
-    if (cached && cached.size > 0) {
-      return Promise.resolve(Array.from(cached))
+    const p = playerManager.get(playerName)
+    if (p && p.blockheads.size > 0) {
+      return Promise.resolve(Array.from(p.blockheads.keys()))
     }
     return new Promise((resolve, reject) => {
       joinLookupQueue.push({ playerName, playerUuid, resolve, reject })
@@ -91,71 +91,37 @@ MessageBot.registerExtension('quest-system', (ex) => {
 
     if (!playerName || !playerUuid) return
 
-    ctx.playerToUuid.set(playerName, playerUuid)
-    ctx.uuidToPlayer.set(playerUuid, playerName)
-    ctx.playerLastActivity.set(playerName, Date.now())
+    // Register/update in playerManager
+    const p = playerManager.setOnline(playerName, playerUuid)
 
-    // Mark online IMMEDIATELY
-    ctx.onlinePlayers.add(playerName)
-
-    // Use pre-loaded index (fast, synchronous)
-    const preKnown = getBlockheadsForUuid(playerUuid, sharedMappingState)
-    if (preKnown && preKnown.size > 0) {
-      for (const bhId of preKnown) {
-        ctx.blockheadToPlayer.set(bhId, playerName)
-        const set = ctx.playerToBlockheads.get(playerName) ?? new Set<number>()
-        set.add(bhId)
-        ctx.playerToBlockheads.set(playerName, set)
-      }
-    }
-
-    // Check blockheadIdToUuid for any seen via packet events
-    for (const [bhId, ownerUuid] of ctx.blockheadIdToUuid.entries()) {
-      if (ownerUuid !== playerUuid) continue
-      if (ctx.blockheadToPlayer.get(bhId) === playerName) continue
-      ctx.blockheadToPlayer.set(bhId, playerName)
-      const set = ctx.playerToBlockheads.get(playerName) ?? new Set<number>()
-      set.add(bhId)
-      ctx.playerToBlockheads.set(playerName, set)
-    }
-
+    // Handle blockhead name from join event (resolve to ID when next event arrives)
     if (blockheadName) {
-      ctx.playerToBlockheadName.set(playerName, blockheadName)
-      const id = ctx.blockheadNameToId.get(blockheadName)
+      p.primaryBlockheadName = blockheadName
+      const id = playerManager.blockheadNameIndex.get(blockheadName)
       if (typeof id === 'number') {
-        ctx.playerToLastBlockhead.set(playerName, id)
+        p.lastBlockheadId = id
       } else {
-        ctx.pendingBlockheadName.set(playerName, blockheadName)
+        p.pendingBlockheadName = blockheadName
       }
     }
 
-    // Background blockhead lookup for new players
-    const currentSet = ctx.playerToBlockheads.get(playerName)
-    if (!currentSet || currentSet.size === 0) {
+    // Apply blockheads seen via packet events (blockheadIdToUuid equivalent now in playerManager)
+    // playerManager.updateFromEvent already handled this for events that arrived before join
+
+    // Background blockhead lookup for players without known blockheads
+    if (p.blockheads.size === 0) {
       enqueueJoinBlockheadLookup(playerName, playerUuid).then(blockheadIds => {
-        if (!ctx.onlinePlayers.has(playerName)) return
+        if (!p.isOnline) return
 
         if (blockheadIds && blockheadIds.length > 0) {
-          const set = ctx.playerToBlockheads.get(playerName) ?? new Set<number>()
-          for (const id of blockheadIds) {
-            set.add(id)
-            ctx.blockheadToPlayer.set(id, playerName)
-            ctx.blockheadToOwnerUuid.set(id, playerUuid)
-          }
-          ctx.playerToBlockheads.set(playerName, set)
+          playerManager.attachBlockheads(p, blockheadIds)
         } else {
           setTimeout(async () => {
-            if (!ctx.onlinePlayers.has(playerName)) return
+            if (!p.isOnline) return
             const retryIds = await listBlockheadsForPlayerByUuid(playerUuid)
-            if (!ctx.onlinePlayers.has(playerName)) return
+            if (!p.isOnline) return
             if (retryIds && retryIds.length > 0) {
-              const retrySet = ctx.playerToBlockheads.get(playerName) ?? new Set<number>()
-              for (const id of retryIds) {
-                retrySet.add(id)
-                ctx.blockheadToPlayer.set(id, playerName)
-                ctx.blockheadToOwnerUuid.set(id, playerUuid)
-              }
-              ctx.playerToBlockheads.set(playerName, retrySet)
+              playerManager.attachBlockheads(p, retryIds)
             }
           }, 3000)
         }
@@ -182,10 +148,8 @@ MessageBot.registerExtension('quest-system', (ex) => {
   ex.world.onLeave.sub((player: any) => {
     const playerName = player.name
     if (playerName) {
-      ctx.onlinePlayers.delete(playerName)
+      playerManager.setOffline(playerName)
       ctx.pendingInventoryRefresh.delete(playerName)
-      ctx.playerLastActivity.delete(playerName)
-      ctx.playerToLastBlockhead.delete(playerName)
       ctx.inventoryCache.delete(playerName)
     }
   })
@@ -205,37 +169,10 @@ MessageBot.registerExtension('quest-system', (ex) => {
   // -------------------------------------------------------------------------
 
   const cleanupStaleMaps = () => {
-    const MAX_MAPPING_SIZE = 1000
-
-    pruneMappingCaches(sharedMappingState, MAX_MAPPING_SIZE)
-
-    if (ctx.blockheadNameToId.size > MAX_MAPPING_SIZE) {
-      const entries = Array.from(ctx.blockheadNameToId.entries())
-      ctx.blockheadNameToId.clear()
-      for (const [k, v] of entries.slice(-MAX_MAPPING_SIZE)) {
-        ctx.blockheadNameToId.set(k, v)
-      }
-    }
-
-    if (ctx.lastCoords.size > 100000) {
-      console.log(`[Quest System] lastCoords exceeded 100000 (${ctx.lastCoords.size}), clearing — online players will repopulate from events`)
-      ctx.lastCoords.clear()
-    }
-
-    if (ctx.blockheadIdToUuid.size > MAX_MAPPING_SIZE) {
-      const entries = Array.from(ctx.blockheadIdToUuid.entries())
-      ctx.blockheadIdToUuid.clear()
-      for (const [k, v] of entries.slice(-MAX_MAPPING_SIZE)) {
-        ctx.blockheadIdToUuid.set(k, v)
-      }
-    }
-
     const now = Date.now()
-    for (const [player, lastTime] of ctx.playerLastActivity.entries()) {
-      if (!ctx.onlinePlayers.has(player) && now - lastTime > 30 * 60 * 1000) {
-        ctx.playerLastActivity.delete(player)
-      }
-    }
+
+    // Prune blockheadNameIndex
+    playerManager.pruneBlockheadNameIndex(1000)
 
     cleanupEventState()
 

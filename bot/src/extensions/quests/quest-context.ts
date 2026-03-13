@@ -64,6 +64,7 @@ export const FAILED_LOOKUP_COOLDOWN = 10 * 1000
 
 // ============================================================================
 // QuestContext — shared state passed to all sub-modules
+// (All player/blockhead mappings removed — use playerManager directly)
 // ============================================================================
 
 export interface QuestContext {
@@ -75,27 +76,14 @@ export interface QuestContext {
     onLeave: { sub: (handler: (player: any) => void) => void }
   }
 
-  // Shared maps
+  // Quest-specific state
   playerProgress: Map<string, PlayerQuestProgress>
-  playerToBlockheads: Map<string, Set<number>>
-  blockheadToPlayer: Map<number, string>
-  blockheadToOwnerUuid: Map<number, string>
-  playerToLastBlockhead: Map<string, number>
-  playerToBlockheadName: Map<string, string>
-  pendingBlockheadName: Map<string, string>
-  blockheadNameToId: Map<string, number>
-  lastCoords: Map<number, { x: number; y: number; time: number }>
-  playerToUuid: Map<string, string>
-  uuidToPlayer: Map<string, string>
-  onlinePlayers: Set<string>
-  blockheadIdToUuid: Map<number, string>
   inventoryCache: Map<string, InventoryCache>
   pendingInventoryRefresh: Set<string>
   inflightInventoryRefresh: Set<string>
   pendingRewards: Map<string, PendingReward[]>
   recentRewardFailures: Map<string, number>
   completionInFlight: Set<string>
-  playerLastActivity: Map<string, number>
   pendingKickDialogue: Map<string, string[]>
 
   // Quest data (prebuilt)
@@ -112,8 +100,6 @@ export interface QuestContext {
 }
 
 export function createQuestContext(ex: any): QuestContext {
-  const { sharedMappingState } = require('../helpers/blockhead-mapping')
-
   const questById = new Map<string, Quest>()
   for (const q of QUESTS) {
     questById.set(q.id, q)
@@ -124,25 +110,12 @@ export function createQuestContext(ex: any): QuestContext {
     world: ex.world,
 
     playerProgress: new Map(),
-    playerToBlockheads: sharedMappingState.playerToBlockheads,
-    blockheadToPlayer: sharedMappingState.blockheadToPlayer,
-    blockheadToOwnerUuid: sharedMappingState.blockheadToOwnerUuid,
-    playerToLastBlockhead: new Map(),
-    playerToBlockheadName: new Map(),
-    pendingBlockheadName: new Map(),
-    blockheadNameToId: new Map(),
-    lastCoords: new Map(),
-    playerToUuid: sharedMappingState.playerToUuid,
-    uuidToPlayer: sharedMappingState.uuidToPlayer,
-    onlinePlayers: new Set(),
-    blockheadIdToUuid: new Map(),
     inventoryCache: new Map(),
     pendingInventoryRefresh: new Set(),
     inflightInventoryRefresh: new Set(),
     pendingRewards: new Map(),
     recentRewardFailures: new Map(),
     completionInFlight: new Set(),
-    playerLastActivity: new Map(),
     pendingKickDialogue: new Map(),
 
     questById,

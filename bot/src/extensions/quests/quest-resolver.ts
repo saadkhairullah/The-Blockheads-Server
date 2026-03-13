@@ -1,66 +1,55 @@
 import { QuestContext, LOG_BOT_DEBUG } from './quest-context'
 import { ActivityEvent } from '../types/shared-types'
 import * as BlockheadService from '../../blockhead-service'
-import { sharedMappingState, updateMappingsFromEvent, listBlockheadsForPlayerByUuid, listAndMapBlockheads } from '../helpers/blockhead-mapping'
+import { playerManager, listBlockheadsForPlayerByUuid, listAndMapBlockheads } from '../helpers/blockhead-mapping'
 import { getActivityMonitorAPI as _getActivityMonitorAPI } from '../helpers/extension-api'
 
 /**
- * Update quest-specific Maps from an event, then delegate shared-map writes
- * to updateMappingsFromEvent in blockhead-mapping.
+ * Update playerManager from an event, then update quest-specific state
+ * (blockheadNameIndex, pendingBlockheadName, lastBlockheadId).
  */
-export const trackBlockheadOwner = (ctx: QuestContext, event: ActivityEvent) => {
+export const trackBlockheadOwner = (_ctx: QuestContext, event: ActivityEvent) => {
   if (typeof event.blockheadId !== 'number') return
 
-  // Quest-specific: blockheadNameToId
+  // Index blockhead name → id (server-unique character names)
   if (event.blockheadName && event.blockheadName !== '?') {
-    ctx.blockheadNameToId.set(event.blockheadName, event.blockheadId)
+    playerManager.blockheadNameIndex.set(event.blockheadName, event.blockheadId)
   } else if (event.player && !event.player.startsWith('Blockhead#')) {
-    ctx.blockheadNameToId.set(event.player, event.blockheadId)
+    playerManager.blockheadNameIndex.set(event.player, event.blockheadId)
   }
 
-  // Quest-specific: blockheadIdToUuid cache
-  if (event.playerUUID) {
-    ctx.blockheadIdToUuid.set(event.blockheadId, event.playerUUID)
-  }
+  // Shared-map writes via playerManager
+  playerManager.updateFromEvent(event)
 
-  // Shared-map writes (playerToBlockheads, blockheadToPlayer, playerToUuid, etc.)
-  updateMappingsFromEvent(event, sharedMappingState)
-
-  // Quest-specific: playerToLastBlockhead
+  // Update lastBlockheadId on the player
   const ownerName = event.playerAccount ?? (event.player && !event.player.startsWith('Blockhead#') ? event.player : null)
   if (ownerName && ownerName !== '?') {
-    ctx.playerToLastBlockhead.set(ownerName, event.blockheadId)
+    const p = playerManager.get(ownerName)
+    if (p) p.lastBlockheadId = event.blockheadId
   }
   if (event.playerUUID) {
-    const knownName = ctx.uuidToPlayer.get(event.playerUUID)
-    if (knownName) {
-      ctx.playerToLastBlockhead.set(knownName, event.blockheadId)
-    }
+    const p = playerManager.getByUuid(event.playerUUID)
+    if (p) p.lastBlockheadId = event.blockheadId
   } else {
-    const cachedUuid = ctx.blockheadIdToUuid.get(event.blockheadId)
-    if (cachedUuid) {
-      const knownName = ctx.uuidToPlayer.get(cachedUuid)
-      if (knownName) {
-        ctx.playerToLastBlockhead.set(knownName, event.blockheadId)
-      }
-    }
+    const p = playerManager.getByBlockheadId(event.blockheadId)
+    if (p) p.lastBlockheadId = event.blockheadId
   }
 
-  // Quest-specific: resolve pendingBlockheadName
+  // Resolve pendingBlockheadName → lastBlockheadId
   if (event.blockheadName) {
-    for (const [playerName, blockheadName] of ctx.pendingBlockheadName.entries()) {
-      if (blockheadName === event.blockheadName) {
-        ctx.playerToLastBlockhead.set(playerName, event.blockheadId)
-        ctx.pendingBlockheadName.delete(playerName)
+    for (const p of playerManager.online()) {
+      if (p.pendingBlockheadName === event.blockheadName) {
+        p.lastBlockheadId = event.blockheadId
+        p.pendingBlockheadName = null
       }
     }
   }
 }
 
-export const ensureBlockheadOwner = async (ctx: QuestContext, blockheadId: number, playerUuid?: string): Promise<string | null> => {
-  const cached = ctx.blockheadToOwnerUuid.get(blockheadId)
+export const ensureBlockheadOwner = async (_ctx: QuestContext, blockheadId: number, playerUuid?: string): Promise<string | null> => {
+  const cached = playerManager.getByBlockheadId(blockheadId)?.uuid
   if (cached) return cached
-  let owner = await resolveOwnerUuidForBlockhead(ctx, blockheadId)
+  let owner = await resolveOwnerUuidForBlockhead(blockheadId)
   if (!owner && typeof playerUuid === 'string') {
     const ids = await listBlockheadsForPlayerByUuid(playerUuid)
     if (ids.includes(blockheadId)) {
@@ -68,31 +57,22 @@ export const ensureBlockheadOwner = async (ctx: QuestContext, blockheadId: numbe
     }
   }
   if (owner) {
-    ctx.blockheadToOwnerUuid.set(blockheadId, owner)
+    const p = playerManager.getByUuid(owner)
+    if (p) playerManager.attachBlockheads(p, [blockheadId])
   }
   return owner
 }
 
-const resolveOwnerUuidForBlockhead = async (ctx: QuestContext, blockheadId: number): Promise<string | null> => {
-  const cached = ctx.blockheadToOwnerUuid.get(blockheadId)
-  if (cached) return cached
-  const directName = ctx.blockheadToPlayer.get(blockheadId)
-  if (directName) {
-    const uuid = ctx.playerToUuid.get(directName)
-    if (uuid) return uuid
-  }
-  for (const [name, ids] of ctx.playerToBlockheads.entries()) {
-    if (ids.has(blockheadId)) {
-      const uuid = ctx.playerToUuid.get(name)
-      if (uuid) return uuid
-    }
-  }
-  for (const name of ctx.onlinePlayers) {
-    const uuid = ctx.playerToUuid.get(name)
-    if (!uuid) continue
-    await listAndMapBlockheads(name, uuid)
-    const refreshed = ctx.blockheadToOwnerUuid.get(blockheadId)
-    if (refreshed) return refreshed
+const resolveOwnerUuidForBlockhead = async (blockheadId: number): Promise<string | null> => {
+  // Check reverse index first
+  const player = playerManager.getByBlockheadId(blockheadId)
+  if (player) return player.uuid
+
+  // Try refreshing all online players
+  for (const p of playerManager.online()) {
+    await listAndMapBlockheads(p.name, p.uuid)
+    const refreshed = playerManager.getByBlockheadId(blockheadId)
+    if (refreshed) return refreshed.uuid
   }
   return null
 }
@@ -111,37 +91,42 @@ export const getBlockheadsFromActivityMonitor = (bot: any, playerName: string): 
 }
 
 export const getKnownBlockheadsForPlayer = (ctx: QuestContext, playerName: string): number[] => {
-  const ids = ctx.playerToBlockheads.get(playerName)
-  if (ids && ids.size > 0) return Array.from(ids)
+  const p = playerManager.get(playerName)
+  if (p && p.blockheads.size > 0) return Array.from(p.blockheads.keys())
   const fallback = getBlockheadsFromActivityMonitor(ctx.bot, playerName)
   return fallback ?? []
 }
 
-export const isActiveBlockheadForPlayer = (ctx: QuestContext, playerName: string, blockheadId: number): boolean => {
-  if (!ctx.onlinePlayers.has(playerName)) return false
-  const coords = ctx.lastCoords.get(blockheadId)
-  if (!coords) return false
-  if (Date.now() - coords.time > 120000) return false
-  const known = ctx.playerToBlockheads.get(playerName)
-  return !known || known.has(blockheadId)
+export const isActiveBlockheadForPlayer = (_ctx: QuestContext, playerName: string, blockheadId: number): boolean => {
+  const p = playerManager.get(playerName)
+  if (!p?.isOnline) return false
+  const bh = p.blockheads.get(blockheadId)
+  if (!bh?.lastCoords) return false
+  if (Date.now() - bh.lastCoords.time > 120000) return false
+  return p.blockheads.has(blockheadId)
 }
 
 export const getBlockheadForPlayer = (ctx: QuestContext, playerName: string): number | null => {
-  const last = ctx.playerToLastBlockhead.get(playerName)
+  const p = playerManager.get(playerName)
+  if (!p) return null
+
+  const last = p.lastBlockheadId
   if (typeof last === 'number' && isActiveBlockheadForPlayer(ctx, playerName, last)) {
     if (LOG_BOT_DEBUG) console.log(`[Quest Debug] getBlockheadForPlayer(${playerName}): using lastActive=${last}`)
     return last
   }
 
-  const ids = ctx.playerToBlockheads.get(playerName)
-  const resolvedIds = (!ids || ids.size === 0) ? getBlockheadsFromActivityMonitor(ctx.bot, playerName) : Array.from(ids)
+  const resolvedIds = p.blockheads.size > 0
+    ? Array.from(p.blockheads.keys())
+    : getBlockheadsFromActivityMonitor(ctx.bot, playerName)
+
   if (resolvedIds && resolvedIds.length > 0) {
     let bestId: number | null = null
     let bestTime = -1
     for (const id of resolvedIds) {
-      const coords = ctx.lastCoords.get(id)
-      if (coords && coords.time > bestTime && isActiveBlockheadForPlayer(ctx, playerName, id)) {
-        bestTime = coords.time
+      const bh = p.blockheads.get(id)
+      if (bh?.lastCoords && bh.lastCoords.time > bestTime && isActiveBlockheadForPlayer(ctx, playerName, id)) {
+        bestTime = bh.lastCoords.time
         bestId = id
       }
     }
@@ -161,7 +146,7 @@ export const resolveBlockheadId = async (ctx: QuestContext, playerName: string):
     if (LOG_BOT_DEBUG) console.log(`[Quest Debug] resolveBlockheadId(${playerName}): found cached blockhead=${existing}`)
     return existing
   }
-  const playerUuid = ctx.playerToUuid.get(playerName)
+  const playerUuid = playerManager.get(playerName)?.uuid
   if (!playerUuid) {
     if (LOG_BOT_DEBUG) console.log(`[Quest Debug] resolveBlockheadId(${playerName}): NO playerUuid found`)
     return null
@@ -172,12 +157,13 @@ export const resolveBlockheadId = async (ctx: QuestContext, playerName: string):
     if (LOG_BOT_DEBUG) console.log(`[Quest Debug] resolveBlockheadId(${playerName}): LMDB returned no blockheads`)
     return null
   }
+  const p = playerManager.get(playerName)
   let bestId: number | null = null
   let bestTime = -1
   for (const id of ids) {
-    const coords = ctx.lastCoords.get(id)
-    if (coords && coords.time > bestTime) {
-      bestTime = coords.time
+    const bh = p?.blockheads.get(id)
+    if (bh?.lastCoords && bh.lastCoords.time > bestTime) {
+      bestTime = bh.lastCoords.time
       bestId = id
     }
   }
@@ -187,13 +173,13 @@ export const resolveBlockheadId = async (ctx: QuestContext, playerName: string):
 }
 
 export const findBlockheadsWithItems = async (ctx: QuestContext, playerName: string, itemIds: number[]): Promise<number[]> => {
-  const playerUuid = ctx.playerToUuid.get(playerName)
+  const playerUuid = playerManager.get(playerName)?.uuid
   if (!playerUuid) return []
 
+  const p = playerManager.get(playerName)
   const knownIds = getKnownBlockheadsForPlayer(ctx, playerName)
-  const activeId = ctx.playerToLastBlockhead.get(playerName)
   const allIds = new Set<number>(knownIds)
-  if (typeof activeId === 'number') allIds.add(activeId)
+  if (p?.lastBlockheadId != null) allIds.add(p.lastBlockheadId)
 
   const result: number[] = []
   for (const bhId of allIds) {

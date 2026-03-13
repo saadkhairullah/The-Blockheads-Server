@@ -4,21 +4,20 @@ import { readFile, writeFile } from 'fs/promises'
 import { config } from '../config'
 import * as BlockheadService from '../blockhead-service'
 import { sendPrivateMessage } from '../private-message'
-import { attachBlockheadsToPlayer, normalizePlayerName, sharedMappingState, pruneMappingCaches } from './helpers/blockhead-mapping'
+import { attachBlockheadsToPlayer, normalizePlayerName, playerManager } from './helpers/blockhead-mapping'
 
 // Sub-modules
 import {
   createActivityContext,
   LOG_BOT_DEBUG, LOG_BLOCKHEAD_MAP,
-  MAX_PLAYER_CACHE, BLOCKHEAD_REFRESH_INTERVAL_MS, ACTIVE_PLAYER_WINDOW_MS,
-  setWithLimit, markPlayerActive, pruneMap,
+  BLOCKHEAD_REFRESH_INTERVAL_MS, ACTIVE_PLAYER_WINDOW_MS,
 } from './activity/activity-context'
 import {
   loadPortalChestBuyers, addPortalChestBuyer, removePortalChestBuyer,
   enforceForbiddenForPlayer, drainPendingForbiddenForBlockhead,
   cleanupPendingRemovals,
 } from './activity/forbidden-items'
-import { setCoords, registerCoordsCommand, cleanupCoordsMaps } from './activity/coords-tracker'
+import { registerCoordsCommand, cleanupCoordsMaps } from './activity/coords-tracker'
 import { startWatching } from './activity/activity-events'
 
 MessageBot.registerExtension('activity-monitor', (ex) => {
@@ -30,38 +29,18 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   loadPortalChestBuyers(ctx)
 
   // -------------------------------------------------------------------------
-  // listBlockheadsForPlayer — bridges mapping, forbidden items, and coords
+  // listBlockheadsForPlayer — fetches from LMDB, attaches to playerManager,
+  // retro-associates any coords that arrived before the mapping was ready
   // -------------------------------------------------------------------------
 
   const listBlockheadsForPlayer = async (playerName: string, playerUuid: string) => {
     try {
       const ids = await BlockheadService.getBlockheadsForPlayer(playerUuid)
       if (!ids || ids.length === 0) return
-      attachBlockheadsToPlayer(
-        playerName,
-        playerUuid,
-        ids,
-        sharedMappingState,
-        { maxCache: MAX_PLAYER_CACHE, pruneMap }
-      )
+      attachBlockheadsToPlayer(playerName, playerUuid, ids, {} as any)
       for (const id of ids) {
         drainPendingForbiddenForBlockhead(ctx, id)
       }
-
-      // Retroactively associate existing coords with this player
-      // Fixes race condition where PLAYER_MOVE events arrive before mapping is ready
-      for (const id of ids) {
-        const existingCoords = ctx.lastCoords.get(id)
-        if (existingCoords) {
-          const current = ctx.lastPlayerCoords.get(playerName)
-          const existingTime = Date.parse(existingCoords.time)
-          const currentTime = current ? Date.parse(current.time) : -1
-          if (!current || (Number.isFinite(existingTime) && existingTime > currentTime)) {
-            setCoords(ctx.lastPlayerCoords, playerName, existingCoords)
-          }
-        }
-      }
-
       if (LOG_BLOCKHEAD_MAP) {
         if (LOG_BOT_DEBUG) console.log(`[Activity Monitor] ${playerName} blockheads: ${ids.join(', ')}`)
       }
@@ -84,16 +63,12 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   }
 
   // -------------------------------------------------------------------------
-  // Export helpers (defined early so they can be wired on ctx)
+  // Wire cross-module function references on the context
   // -------------------------------------------------------------------------
 
   const getPlayerUuid = (playerName: string): string | null => {
-    return ctx.playerToUuid.get(playerName) ?? ctx.playerToUuid.get(playerName.toUpperCase()) ?? null
+    return playerManager.get(playerName)?.uuid ?? playerManager.get(playerName.toUpperCase())?.uuid ?? null
   }
-
-  // -------------------------------------------------------------------------
-  // Wire cross-module function references on the context
-  // -------------------------------------------------------------------------
 
   ctx.takeItemFromBlockhead = takeItemFromBlockhead
   ctx.listBlockheadsForPlayer = listBlockheadsForPlayer
@@ -114,22 +89,24 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   // -------------------------------------------------------------------------
 
   const TRACKED_BH_PATH = join(config.paths.dataDir, 'tracked-blockheads.json')
-  const playerTrackedBlockhead = sharedMappingState.playerTrackedBlockhead
 
-  // Load persisted selections on startup
+  // Local map of user-selected tracked blockheads (persisted to disk)
+  const trackedSelections = new Map<string, number>()
+
+  // Load persisted selections on startup — apply to Player objects as they join
   readFile(TRACKED_BH_PATH, 'utf8').then(data => {
     const parsed = JSON.parse(data) as Record<string, number>
     for (const [name, id] of Object.entries(parsed)) {
-      playerTrackedBlockhead.set(name, id)
+      trackedSelections.set(name, id)
     }
-    console.log(`[Activity Monitor] Loaded ${playerTrackedBlockhead.size} tracked blockhead selections`)
+    console.log(`[Activity Monitor] Loaded ${trackedSelections.size} tracked blockhead selections`)
   }).catch(() => {
     console.log('[Activity Monitor] No tracked-blockheads.json, starting fresh')
   })
 
   const saveTrackedBlockheads = () => {
     const obj: Record<string, number> = {}
-    for (const [name, id] of playerTrackedBlockhead.entries()) {
+    for (const [name, id] of trackedSelections.entries()) {
       obj[name] = id
     }
     writeFile(TRACKED_BH_PATH, JSON.stringify(obj, null, 2)).catch(err =>
@@ -155,17 +132,19 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
 
     if (blockheads.length === 1) {
       const bh = blockheads[0]
-      const coords = ctx.lastCoords.get(bh.blockheadId)
+      const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
+      const coords = p?.blockheads.get(bh.blockheadId)?.lastCoords
       const coordStr = coords ? `last seen at (${coords.x}, ${coords.y})` : 'no position yet'
       sendPrivateMessage(playerName, `${playerName}: You have one blockhead (${bh.name}) — tracked automatically. ${coordStr}`)
       return
     }
 
-    const trackedId = playerTrackedBlockhead.get(playerName)
+    const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
+    const trackedId = p?.trackedBlockheadId
     let msg = `${playerName}: Your blockheads:\n`
     for (let i = 0; i < blockheads.length; i++) {
       const bh = blockheads[i]
-      const coords = ctx.lastCoords.get(bh.blockheadId)
+      const coords = p?.blockheads.get(bh.blockheadId)?.lastCoords
       const coordStr = coords ? `(${coords.x}, ${coords.y})` : 'no position yet'
       const isTracked = bh.blockheadId === trackedId
       msg += `  ${i + 1}. ${bh.name}${isTracked ? ' — TRACKED' : ''} — ${coordStr}\n`
@@ -208,7 +187,9 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
     }
 
     const chosen = blockheads[n - 1]
-    playerTrackedBlockhead.set(playerName, chosen.blockheadId)
+    const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
+    if (p) p.trackedBlockheadId = chosen.blockheadId
+    trackedSelections.set(playerName, chosen.blockheadId)
     saveTrackedBlockheads()
     sendPrivateMessage(playerName, `${playerName}: Now tracking ${chosen.name}. Your coords and quests will use this blockhead.`)
     console.log(`[Activity Monitor] ${playerName} selected tracked blockhead: ${chosen.name} (${chosen.blockheadId})`)
@@ -225,30 +206,25 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
     const playerName = normalizePlayerName(rawName, 'upper')
     if (!playerName) return
 
-    // Clear stale mappings for this player before setting new ones
-    const oldBlockheads = ctx.playerToBlockheads.get(playerName) ?? ctx.playerToBlockheads.get(rawName)
-    if (oldBlockheads) {
-      for (const bhId of oldBlockheads) {
-        ctx.blockheadToUuid.delete(bhId)
-        ctx.lastCoords.delete(bhId)
-      }
-      ctx.playerToBlockheads.delete(playerName)
-      if (rawName !== playerName) ctx.playerToBlockheads.delete(rawName)
-    }
-    ctx.lastPlayerCoords.delete(playerName)
-    if (rawName !== playerName) ctx.lastPlayerCoords.delete(rawName)
+    // Clear stale session data, then mark online
+    playerManager.setOffline(playerName)
+    if (rawName !== playerName) playerManager.setOffline(rawName)
 
-    setWithLimit(ctx.playerToUuid, rawName, playerUuid, MAX_PLAYER_CACHE)
+    playerManager.setOnline(playerName, playerUuid)
     if (rawName !== playerName) {
-      setWithLimit(ctx.playerToUuid, playerName, playerUuid, MAX_PLAYER_CACHE)
+      const rp = playerManager.getOrCreate(rawName, playerUuid)
+      rp.isOnline = true
+      rp.lastActivity = Date.now()
     }
-    setWithLimit(ctx.uuidToPlayer, playerUuid, rawName, MAX_PLAYER_CACHE)
-    ctx.onlinePlayers.add(playerName)
-    if (rawName !== playerName) {
-      ctx.onlinePlayers.add(rawName)
-    }
-    markPlayerActive(ctx, playerName)
 
+    // Apply persisted tracked blockhead selection
+    const trackedId = trackedSelections.get(playerName) ?? trackedSelections.get(rawName)
+    if (trackedId != null) {
+      const p = playerManager.get(playerName)
+      if (p) p.trackedBlockheadId = trackedId
+    }
+
+    // Drain pending forbidden items (from before join)
     const pending = ctx.pendingForbiddenByUuid.get(playerUuid)
     if (pending && pending.length > 0) {
       ctx.pendingForbiddenByUuid.delete(playerUuid)
@@ -257,8 +233,7 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
       }
     }
 
-    // CRITICAL: Await blockhead lookup to prevent race condition where PLAYER_MOVE
-    // events arrive before mappings are ready, causing coords to freeze
+    // CRITICAL: Await blockhead lookup so PLAYER_MOVE events don't race ahead of the mapping
     await listBlockheadsForPlayer(rawName, playerUuid)
   })
 
@@ -270,8 +245,8 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
     const rawName = player.name
     if (!rawName) return
     const playerName = normalizePlayerName(rawName, 'upper')
-    if (playerName) ctx.onlinePlayers.delete(playerName)
-    if (rawName !== playerName) ctx.onlinePlayers.delete(rawName)
+    if (playerName) playerManager.setOffline(playerName)
+    if (rawName !== playerName) playerManager.setOffline(rawName)
   })
 
   // -------------------------------------------------------------------------
@@ -288,15 +263,10 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
     const now = Date.now()
     const playersToRefresh: Array<{ name: string; uuid: string }> = []
 
-    for (const playerName of ctx.onlinePlayers) {
-      const last = ctx.playerLastActivity.get(playerName) ?? 0
-      const hasBlockheads = ctx.playerToBlockheads.has(playerName) && ctx.playerToBlockheads.get(playerName)!.size > 0
-
-      if (!hasBlockheads || (now - last <= ACTIVE_PLAYER_WINDOW_MS)) {
-        const playerUuid = ctx.playerToUuid.get(playerName)
-        if (playerUuid) {
-          playersToRefresh.push({ name: playerName, uuid: playerUuid })
-        }
+    for (const p of playerManager.online()) {
+      const hasBlockheads = p.blockheads.size > 0
+      if (!hasBlockheads || (now - p.lastActivity) <= ACTIVE_PLAYER_WINDOW_MS) {
+        playersToRefresh.push({ name: p.name, uuid: p.uuid })
       }
     }
 
@@ -311,46 +281,29 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   // Cleanup stale map entries
   // -------------------------------------------------------------------------
 
-  const cleanupStaleMaps = (actCtx: typeof ctx) => {
+  const cleanupStaleMaps = (_actCtx: typeof ctx) => {
     const now = Date.now()
     const STALE_THRESHOLD = 30 * 60 * 1000
 
-    for (const [player, lastTime] of actCtx.playerLastActivity.entries()) {
-      if (!actCtx.onlinePlayers.has(player) && now - lastTime > STALE_THRESHOLD) {
-        actCtx.playerLastActivity.delete(player)
-      }
-    }
-
-    pruneMappingCaches(sharedMappingState, MAX_PLAYER_CACHE)
-
-    if (actCtx.blockheadNameToOwner.size > 500) {
-      const entries = Array.from(actCtx.blockheadNameToOwner.entries())
-      actCtx.blockheadNameToOwner.clear()
-      for (const [k, v] of entries.slice(-500)) {
-        actCtx.blockheadNameToOwner.set(k, v)
-      }
-    }
-
-    if (actCtx.forbiddenCounts.size > 200) {
-      const entries = Array.from(actCtx.forbiddenCounts.entries())
-      actCtx.forbiddenCounts.clear()
+    if (ctx.forbiddenCounts.size > 200) {
+      const entries = Array.from(ctx.forbiddenCounts.entries())
+      ctx.forbiddenCounts.clear()
       for (const [k, v] of entries.slice(-200)) {
-        actCtx.forbiddenCounts.set(k, v)
+        ctx.forbiddenCounts.set(k, v)
       }
     }
 
-    if (actCtx.bannedForForbidden.size > 100) {
-      const entries = Array.from(actCtx.bannedForForbidden)
-      actCtx.bannedForForbidden.clear()
+    if (ctx.bannedForForbidden.size > 100) {
+      const entries = Array.from(ctx.bannedForForbidden)
+      ctx.bannedForForbidden.clear()
       for (const entry of entries.slice(-100)) {
-        actCtx.bannedForForbidden.add(entry)
+        ctx.bannedForForbidden.add(entry)
       }
     }
 
-    const { FAILED_LOOKUP_COOLDOWN } = require('./activity/activity-context')
-    for (const [blockheadId, failTime] of actCtx.failedOwnerLookups.entries()) {
-      if (now - failTime > FAILED_LOOKUP_COOLDOWN) {
-        actCtx.failedOwnerLookups.delete(blockheadId)
+    for (const [blockheadId, failTime] of ctx.failedOwnerLookups.entries()) {
+      if (now - failTime > STALE_THRESHOLD) {
+        ctx.failedOwnerLookups.delete(blockheadId)
       }
     }
   }
@@ -360,31 +313,26 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   // -------------------------------------------------------------------------
 
   const getBlockheadsForPlayer = (playerName: string): number[] => {
-    const ids = ctx.playerToBlockheads.get(playerName) ?? ctx.playerToBlockheads.get(playerName.toUpperCase())
-    if (!ids || ids.size === 0) return []
-    return Array.from(ids)
+    const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
+    return p ? Array.from(p.blockheads.keys()) : []
   }
 
   const getMostRecentBlockheadId = (playerName: string): number | null => {
-    const ids = ctx.playerToBlockheads.get(playerName) ?? ctx.playerToBlockheads.get(playerName.toUpperCase())
-    if (!ids || ids.size === 0) return null
+    const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
+    if (!p || p.blockheads.size === 0) return null
 
-    // Multi-BH player with an explicit selection — use it
-    if (ids.size > 1) {
-      const tracked = playerTrackedBlockhead.get(playerName)
-      if (tracked && ids.has(tracked)) return tracked
+    // User-selected tracking takes priority for multi-BH players
+    if (p.blockheads.size > 1 && p.trackedBlockheadId != null && p.blockheads.has(p.trackedBlockheadId)) {
+      return p.trackedBlockheadId
     }
 
-    // Single-BH player or no selection made — fall back to last active
+    // Fall back to most recently active by coords time
     let bestId: number | null = null
     let bestTime = -1
-    for (const id of ids) {
-      const coords = ctx.lastCoords.get(id)
-      if (!coords) continue
-      const t = Date.parse(coords.time)
-      if (Number.isNaN(t)) continue
-      if (t > bestTime) {
-        bestTime = t
+    for (const [id, bh] of p.blockheads.entries()) {
+      if (!bh.lastCoords) continue
+      if (bh.lastCoords.time > bestTime) {
+        bestTime = bh.lastCoords.time
         bestId = id
       }
     }
@@ -397,6 +345,10 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
     getBlockheadsForPlayer,
     getMostRecentBlockheadId,
     getPlayerUuid,
+    getLatestCoords: (playerName: string) => {
+      const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
+      return p?.mostRecentCoords ?? null
+    },
   }
 
   ex.remove = () => {

@@ -1,5 +1,6 @@
 // @ts-ignore — CURRENT_QUEST_VERSION, LAST_OLD_QUEST_ID, FIRST_NEW_QUEST_ID will be used in upcoming kill quest update
 import { QuestContext, Quest, QuestRequirement, QuestReward, LOG_QUEST_CACHE, LOG_BOT_DEBUG, ACTIVE_BLOCKHEAD_WINDOW_MS, SHUTDOWN_FLAG_PATH, CURRENT_QUEST_VERSION, LAST_OLD_QUEST_ID, FIRST_NEW_QUEST_ID } from './quest-context'
+import { playerManager } from '../helpers/blockhead-mapping'
 import { sendPrivateMessage } from '../../private-message'
 import * as BlockheadService from '../../blockhead-service'
 import { getBankAPI as _getBankAPI, getActivityMonitorAPI as _getActivityMonitorAPI } from '../helpers/extension-api'
@@ -34,7 +35,8 @@ export const isPlayerCurrentlyAtLocation = (ctx: QuestContext, playerName: strin
   const blockheadIds = getKnownBlockheadsForPlayer(ctx, playerName)
 
   for (const bhId of blockheadIds) {
-    const coords = ctx.lastCoords.get(bhId)
+    const p = playerManager.getByBlockheadId(bhId)
+    const coords = p?.blockheads.get(bhId)?.lastCoords
     if (!coords) continue
     if (Date.now() - coords.time > ACTIVE_BLOCKHEAD_WINDOW_MS) continue
 
@@ -230,7 +232,7 @@ const completeQuest = async (ctx: QuestContext, playerName: string, quest: Quest
     if (LOG_QUEST_CACHE) console.log(`[Quest Debug] completeQuest(${playerName}): blockheads with items: [${blockheadsWithItems.join(',')}]`)
 
     let blockheadId: number | null = null
-    const lastActive = ctx.playerToLastBlockhead.get(playerName)
+    const lastActive = playerManager.get(playerName)?.lastBlockheadId ?? null
     if (typeof lastActive === 'number' && blockheadsWithItems.includes(lastActive)) {
       blockheadId = lastActive
       if (LOG_QUEST_CACHE) console.log(`[Quest Debug] completeQuest(${playerName}): using lastActive blockhead=${blockheadId} (has items)`)
@@ -259,7 +261,7 @@ const completeQuest = async (ctx: QuestContext, playerName: string, quest: Quest
       return
     }
 
-    const owner = await ensureBlockheadOwner(ctx, blockheadId, ctx.playerToUuid.get(playerName))
+    const owner = await ensureBlockheadOwner(ctx, blockheadId, playerManager.get(playerName)?.uuid)
     if (!owner) {
       const fKey = `${playerName}:${quest.id}`
       sendPrivateMessage(playerName, `${playerName}: Delivery failed because your blockhead owner is not known yet. Please relog/move and try again.`)
@@ -272,13 +274,13 @@ const completeQuest = async (ctx: QuestContext, playerName: string, quest: Quest
     await new Promise(resolve => setTimeout(resolve, 200))
 
     const failureKey = `${playerName}:${quest.id}`
-    let result = await applyQuestItemsByBlockhead(blockheadId!, removeItems, giveItems, ctx.playerToUuid.get(playerName))
+    let result = await applyQuestItemsByBlockhead(blockheadId!, removeItems, giveItems, playerManager.get(playerName)?.uuid)
 
     if (!result.ok && blockheadsWithItems.length > 1) {
       for (const altId of blockheadsWithItems) {
         if (altId === blockheadId) continue
         if (LOG_QUEST_CACHE) console.log(`[Quest Debug] completeQuest(${playerName}): trying alternate blockhead=${altId}`)
-        result = await applyQuestItemsByBlockhead(altId, removeItems, giveItems, ctx.playerToUuid.get(playerName))
+        result = await applyQuestItemsByBlockhead(altId, removeItems, giveItems, playerManager.get(playerName)?.uuid)
         if (result.ok) {
           blockheadId = altId
           break
@@ -290,7 +292,7 @@ const completeQuest = async (ctx: QuestContext, playerName: string, quest: Quest
       const refreshedId = await resolveBlockheadId(ctx, playerName)
       if (refreshedId !== null) {
         if (LOG_QUEST_CACHE) console.log(`[Quest Debug] completeQuest(${playerName}): retrying with refreshed blockhead=${refreshedId}`)
-        result = await applyQuestItemsByBlockhead(refreshedId, removeItems, giveItems, ctx.playerToUuid.get(playerName))
+        result = await applyQuestItemsByBlockhead(refreshedId, removeItems, giveItems, playerManager.get(playerName)?.uuid)
         if (result.ok) blockheadId = refreshedId
       }
     }
@@ -350,7 +352,7 @@ const completeQuest = async (ctx: QuestContext, playerName: string, quest: Quest
   if (giveItems.length > 0) {
     setTimeout(() => {
       // Don't give items to an offline player — defer to /claim
-      if (!ctx.onlinePlayers.has(playerName)) {
+      if (!(playerManager.get(playerName)?.isOnline ?? false)) {
         addToPendingRewards(ctx, playerName, giveItems, `Quest: ${quest.title}`)
         console.log(`[Quest System] ${playerName} offline at reward delivery — deferred to /claim`)
         return

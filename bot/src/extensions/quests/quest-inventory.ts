@@ -5,6 +5,7 @@ import {
   INVENTORY_INACTIVITY_MS,
   LOG_QUEST_CACHE, LOG_BOT_DEBUG,
 } from './quest-context'
+import { playerManager } from '../helpers/blockhead-mapping'
 import { getKnownBlockheadsForPlayer } from './quest-resolver'
 
 let inventoryPollTimer: NodeJS.Timeout | null = null
@@ -60,32 +61,33 @@ export const pollOnlinePlayerInventories = async (ctx: QuestContext) => {
 
   try {
     const now = Date.now()
-    const activePlayers = Array.from(ctx.onlinePlayers).filter(name => {
-      const lastActive = ctx.playerLastActivity.get(name)
-      return !(lastActive && (now - lastActive) > INVENTORY_INACTIVITY_MS)
-    })
+    const activePlayers = Array.from(playerManager.online())
+      .filter(p => {
+        const lastActive = p.lastActivity
+        return !(lastActive && (now - lastActive) > INVENTORY_INACTIVITY_MS)
+      })
 
     if (activePlayers.length === 0) return
 
-    await Promise.all(activePlayers.map(async (playerName) => {
-      const uuid = ctx.playerToUuid.get(playerName)
+    await Promise.all(activePlayers.map(async (p) => {
+      const uuid = p.uuid
       if (!uuid) return
 
       const counts = await BlockheadService.getPlayerInventoryCounts(uuid)
       if (!counts || Object.keys(counts).length === 0) return
-      if (!ctx.onlinePlayers.has(playerName)) return
+      if (!p.isOnline) return
 
-      setInventoryCacheEntry(ctx, playerName, {
+      setInventoryCacheEntry(ctx, p.name, {
         items: counts as { [itemId: string]: number },
         lastUpdated: Date.now(),
         blockheadId: -1,
       })
 
       if (LOG_QUEST_CACHE && LOG_BOT_DEBUG) {
-        console.log(`[Quest System] ${playerName} inventory cached`)
+        console.log(`[Quest System] ${p.name} inventory cached`)
       }
 
-      ctx.checkQuestCompletion(playerName)
+      ctx.checkQuestCompletion(p.name)
     }))
   } finally {
     inventoryPollInProgress = false
@@ -116,7 +118,7 @@ export const refreshInventoryOnMove = async (ctx: QuestContext, playerName: stri
   ctx.inflightInventoryRefresh.add(playerName)
   ctx.pendingInventoryRefresh.delete(playerName)
   try {
-    const playerUuid = ctx.playerToUuid.get(playerName)
+    const playerUuid = playerManager.get(playerName)?.uuid
     if (!playerUuid) return
     const knownIds = getKnownBlockheadsForPlayer(ctx, playerName)
     if (knownIds.length > 1) {

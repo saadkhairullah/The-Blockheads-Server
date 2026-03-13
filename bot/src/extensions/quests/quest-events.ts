@@ -1,7 +1,7 @@
 import { QuestContext, LOG_BOT_DEBUG, FAILED_LOOKUP_COOLDOWN } from './quest-context'
 import { ActivityEvent } from '../types/shared-types'
 import { eventDispatcher } from '../../event-dispatcher'
-import { resolveEventPlayer, sharedMappingState, listAndMapBlockheads, attachBlockheadsToUuid } from '../helpers/blockhead-mapping'
+import { playerManager, listAndMapBlockheads } from '../helpers/blockhead-mapping'
 import { trackBlockheadOwner } from './quest-resolver'
 import { checkTravelProgress } from './quest-completion'
 import { refreshInventoryOnMove } from './quest-inventory'
@@ -13,8 +13,7 @@ const failedOwnerLookups = new Map<number, number>()
 
 const tryResolveUnknownBlockhead = async (ctx: QuestContext, blockheadId: number, event: ActivityEvent) => {
   if (pendingOwnerLookups.has(blockheadId)) return
-  if (ctx.blockheadToPlayer.has(blockheadId)) return
-  if (ctx.blockheadToOwnerUuid.has(blockheadId)) return
+  if (playerManager.getByBlockheadId(blockheadId)) return
 
   const lastFailed = failedOwnerLookups.get(blockheadId)
   if (lastFailed && (Date.now() - lastFailed) < FAILED_LOOKUP_COOLDOWN) return
@@ -23,57 +22,23 @@ const tryResolveUnknownBlockhead = async (ctx: QuestContext, blockheadId: number
   if (LOG_BOT_DEBUG) console.log(`[Quest System] Unknown blockhead ${blockheadId}, querying owner...`)
 
   try {
-    // Try to find owner by checking all online players
-    let ownerUuid: string | null = null
-    for (const [name, ids] of ctx.playerToBlockheads.entries()) {
-      if (ids.has(blockheadId)) {
-        const uuid = ctx.playerToUuid.get(name)
-        if (uuid) {
-          ownerUuid = uuid
-          break
-        }
+    let ownerPlayer = playerManager.getByBlockheadId(blockheadId)
+
+    if (!ownerPlayer) {
+      // Try refreshing all online players
+      for (const p of playerManager.online()) {
+        await listAndMapBlockheads(p.name, p.uuid)
+        ownerPlayer = playerManager.getByBlockheadId(blockheadId)
+        if (ownerPlayer) break
       }
     }
 
-    if (!ownerUuid) {
-      // Check blockheadToOwnerUuid
-      ownerUuid = ctx.blockheadToOwnerUuid.get(blockheadId) ?? null
-    }
+    if (ownerPlayer) {
+      ownerPlayer.lastBlockheadId = blockheadId
+      if (LOG_BOT_DEBUG) console.log(`[Quest System] Mapped blockhead ${blockheadId} to ${ownerPlayer.name}`)
 
-    if (!ownerUuid) {
-      // Try refreshing online players
-      for (const name of ctx.onlinePlayers) {
-        const uuid = ctx.playerToUuid.get(name)
-        if (!uuid) continue
-        await listAndMapBlockheads(name, uuid)
-        const refreshed = ctx.blockheadToOwnerUuid.get(blockheadId)
-        if (refreshed) {
-          ownerUuid = refreshed
-          break
-        }
-      }
-    }
-
-    if (ownerUuid) {
-      ctx.blockheadToOwnerUuid.set(blockheadId, ownerUuid)
-      attachBlockheadsToUuid(ownerUuid, [blockheadId], sharedMappingState)
-      const playerName = ctx.uuidToPlayer.get(ownerUuid) ?? null
-
-      if (playerName) {
-        ctx.blockheadToPlayer.set(blockheadId, playerName)
-        const set = ctx.playerToBlockheads.get(playerName) ?? new Set<number>()
-        set.add(blockheadId)
-        ctx.playerToBlockheads.set(playerName, set)
-        if (LOG_BOT_DEBUG) console.log(`[Quest System] Mapped blockhead ${blockheadId} to ${playerName}`)
-
-        if (typeof event.x === 'number' && typeof event.y === 'number') {
-          if (ctx.onlinePlayers.has(playerName)) {
-            ctx.playerToLastBlockhead.set(playerName, blockheadId)
-            checkTravelProgress(ctx, playerName, event.x, event.y)
-          }
-        }
-      } else {
-        console.warn(`[Quest System] Owner UUID ${ownerUuid} unknown for blockhead ${blockheadId}`)
+      if (typeof event.x === 'number' && typeof event.y === 'number' && ownerPlayer.isOnline) {
+        checkTravelProgress(ctx, ownerPlayer.name, event.x, event.y)
       }
     } else {
       failedOwnerLookups.set(blockheadId, Date.now())
@@ -85,7 +50,7 @@ const tryResolveUnknownBlockhead = async (ctx: QuestContext, blockheadId: number
 
 export const processEvent = (ctx: QuestContext, event: ActivityEvent) => {
   trackBlockheadOwner(ctx, event)
-  const eventPlayer = resolveEventPlayer(event, sharedMappingState)
+  const eventPlayer = playerManager.resolveEventPlayer(event)
 
   switch (event.type) {
     case 'PLAYER_MOVE':
@@ -95,18 +60,23 @@ export const processEvent = (ctx: QuestContext, event: ActivityEvent) => {
     case 'INVENTORY_SNAPSHOT':
       if (typeof event.blockheadId === 'number') {
         if (typeof event.x === 'number' && typeof event.y === 'number') {
-          ctx.lastCoords.set(event.blockheadId, { x: event.x, y: event.y, time: Date.now() })
+          // Write coords to Blockhead object
+          const bhPlayer = playerManager.getByBlockheadId(event.blockheadId)
+          const bh = bhPlayer?.blockheads.get(event.blockheadId)
+          if (bh) bh.lastCoords = { x: event.x, y: event.y, time: Date.now() }
+          if (bhPlayer) bhPlayer.lastBlockheadId = event.blockheadId
 
-          if (eventPlayer && ctx.onlinePlayers.has(eventPlayer)) {
+          if (eventPlayer && (playerManager.get(eventPlayer)?.isOnline ?? false)) {
             const accountName = event.playerAccount ?? eventPlayer
-            // Determine if this blockhead is the tracked one (or the only one)
-            const playerBHs = ctx.playerToBlockheads.get(eventPlayer)
-            const trackedId = sharedMappingState.playerTrackedBlockhead.get(eventPlayer)
-            const isTrackedBH = !playerBHs || playerBHs.size <= 1 || !trackedId || trackedId === event.blockheadId
+            const p = playerManager.get(eventPlayer)
+            // Only process travel/inventory for the tracked blockhead (or single BH)
+            const trackedId = p?.trackedBlockheadId
+            const isTrackedBH = !p || p.blockheads.size <= 1 || !trackedId || trackedId === event.blockheadId
 
             if (isTrackedBH) {
               if (accountName && accountName !== '?') {
-                ctx.playerToLastBlockhead.set(accountName, event.blockheadId)
+                const ap = playerManager.get(accountName)
+                if (ap) ap.lastBlockheadId = event.blockheadId
               }
               if (ctx.pendingInventoryRefresh.has(eventPlayer)) {
                 refreshInventoryOnMove(ctx, eventPlayer, event.blockheadId).catch(err => {
@@ -115,12 +85,13 @@ export const processEvent = (ctx: QuestContext, event: ActivityEvent) => {
               }
               checkTravelProgress(ctx, eventPlayer, event.x, event.y)
             }
-          } else if (!eventPlayer && !ctx.blockheadToPlayer.has(event.blockheadId)) {
+          } else if (!eventPlayer && !playerManager.getByBlockheadId(event.blockheadId)) {
             tryResolveUnknownBlockhead(ctx, event.blockheadId, event)
           }
         }
-        if (eventPlayer && ctx.onlinePlayers.has(eventPlayer)) {
-          ctx.playerLastActivity.set(eventPlayer, Date.now())
+        if (eventPlayer) {
+          const p = playerManager.get(eventPlayer)
+          if (p?.isOnline) p.lastActivity = Date.now()
         }
       }
       break

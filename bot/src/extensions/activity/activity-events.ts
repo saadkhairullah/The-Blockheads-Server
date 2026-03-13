@@ -1,17 +1,13 @@
 import { eventDispatcher } from '../../event-dispatcher'
 import * as BlockheadService from '../../blockhead-service'
-import {
-  resolveEventPlayer, resolveOwnerFromMappings, resolveOwnerWithRefresh,
-  updateMappingsFromEvent, sharedMappingState,
-} from '../helpers/blockhead-mapping'
+import { playerManager } from '../helpers/blockhead-mapping'
 import { getBankAPI as _getBankAPI } from '../helpers/extension-api'
 import { ActivityEvent } from '../types/shared-types'
 import {
-  ActivityContext, LOG_BOT_DEBUG, LOG_ACTIVITY_EVENTS, LOG_BLOCKHEAD_MAP,
-  MAX_PLAYER_CACHE, FORBIDDEN_ITEM_IDS, FAILED_LOOKUP_COOLDOWN,
-  setWithLimit, markPlayerActive,
+  ActivityContext, LOG_BOT_DEBUG, LOG_ACTIVITY_EVENTS,
+  FORBIDDEN_ITEM_IDS, FAILED_LOOKUP_COOLDOWN,
+  markPlayerActive,
 } from './activity-context'
-import { setCoords } from './coords-tracker'
 import {
   handleForbiddenDetected, handleForbiddenCleared,
   drainPendingForbiddenForBlockhead,
@@ -25,75 +21,44 @@ export const processEvent = (ctx: ActivityContext, bot: any, event: ActivityEven
   if (LOG_ACTIVITY_EVENTS) {
     if (LOG_BOT_DEBUG) console.log(`[Activity] ${event.type}: ${event.player} (account=${event.playerAccount}, blockhead=${event.blockheadName}, uuid=${event.playerUUID})`)
   }
-  const eventTime = event.time ?? event.timestamp ?? new Date().toISOString()
 
-  // Shared mapping writes (playerToBlockheads, blockheadToPlayer, etc.)
-  updateMappingsFromEvent(event, sharedMappingState)
+  // Register player/blockhead in playerManager (creates player if new, indexes blockhead)
+  playerManager.updateFromEvent(event)
 
-  // Activity-specific: register with setWithLimit bounds + drain pending forbidden
-  if (event.playerAccount && event.playerUUID && event.playerAccount !== '?') {
-    setWithLimit(ctx.playerToUuid, event.playerAccount, event.playerUUID, MAX_PLAYER_CACHE)
-    setWithLimit(ctx.uuidToPlayer, event.playerUUID, event.playerAccount, MAX_PLAYER_CACHE)
-  }
-
-  if (typeof event.blockheadId === 'number' && event.playerAccount && event.playerAccount !== '?') {
-    const existing = ctx.playerToBlockheads.get(event.playerAccount)
-    if (!existing || !existing.has(event.blockheadId)) {
-      if (LOG_BLOCKHEAD_MAP) {
-        if (LOG_BOT_DEBUG) console.log(`[Activity Monitor] Registered blockhead ${event.blockheadId} -> ${event.playerAccount}`)
-      }
+  // Drain pending forbidden items now that we have the blockhead mapped
+  if (typeof event.blockheadId === 'number') {
+    drainPendingForbiddenForBlockhead(ctx, event.blockheadId)
+    // If blockhead still not mapped to a player, kick off a background owner lookup
+    if (!event.playerUUID && !playerManager.getByBlockheadId(event.blockheadId)) {
+      resolveUnknownBlockhead(ctx, event.blockheadId)
     }
-    drainPendingForbiddenForBlockhead(ctx, event.blockheadId)
   }
 
-  if (typeof event.blockheadId === 'number' && event.playerUUID) {
-    setWithLimit(ctx.blockheadToUuid, event.blockheadId, event.playerUUID, MAX_PLAYER_CACHE)
-    drainPendingForbiddenForBlockhead(ctx, event.blockheadId)
-  } else if (typeof event.blockheadId === 'number' && !ctx.blockheadToUuid.has(event.blockheadId)) {
-    // Last-resort owner lookup for events without playerUUID
-    resolveUnknownBlockhead(ctx, event.blockheadId)
-  }
-
-  const state = {
-    playerToBlockheads: ctx.playerToBlockheads,
-    playerToUuid: ctx.playerToUuid,
-    uuidToPlayer: ctx.uuidToPlayer,
-    blockheadToPlayer: ctx.blockheadToPlayer,
-    blockheadToUuid: ctx.blockheadToUuid,
-    blockheadToOwnerUuid: ctx.blockheadToOwnerUuid,
-  }
-  const ownerAlias = resolveOwnerFromMappings(event.blockheadId, state)
-  const resolvedOwner = resolveEventPlayer(event, state) ?? ownerAlias
+  const resolvedOwner = playerManager.resolveEventPlayer(event)
 
   const bankAPI = _getBankAPI(bot)
 
   switch (event.type) {
     case 'PLAYER_MOVE':
       if (typeof event.blockheadId === 'number' && typeof event.x === 'number' && typeof event.y === 'number') {
-        setCoords(ctx.lastCoords, event.blockheadId, { x: event.x, y: event.y, time: eventTime })
-        const moveOwner = resolveMoveOwner(ctx, event, ownerAlias)
-        if (moveOwner) {
-          setCoords(ctx.lastPlayerCoords, moveOwner, { x: event.x, y: event.y, time: eventTime })
-          if (event.blockheadName) {
-            ctx.blockheadNameToOwner.set(event.blockheadName, moveOwner)
-          }
+        updateBlockheadCoords(event.blockheadId, event.x, event.y)
+        if (event.blockheadName) {
+          const bh = playerManager.getByBlockheadId(event.blockheadId)?.blockheads.get(event.blockheadId)
+          if (bh) bh.name = event.blockheadName
         }
       }
-      markPlayerActive(ctx, resolvedOwner)
+      markPlayerActive(resolvedOwner)
       break
 
     case 'PLAYER_ACTION':
       if (typeof event.blockheadId === 'number' && typeof event.x === 'number' && typeof event.y === 'number') {
-        setCoords(ctx.lastCoords, event.blockheadId, { x: event.x, y: event.y, time: eventTime })
-        const actionOwner = resolveMoveOwner(ctx, event, ownerAlias)
-        if (actionOwner) {
-          setCoords(ctx.lastPlayerCoords, actionOwner, { x: event.x, y: event.y, time: eventTime })
-          if (event.blockheadName) {
-            ctx.blockheadNameToOwner.set(event.blockheadName, actionOwner)
-          }
+        updateBlockheadCoords(event.blockheadId, event.x, event.y)
+        if (event.blockheadName) {
+          const bh = playerManager.getByBlockheadId(event.blockheadId)?.blockheads.get(event.blockheadId)
+          if (bh) bh.name = event.blockheadName
         }
       }
-      markPlayerActive(ctx, resolvedOwner)
+      markPlayerActive(resolvedOwner)
       checkInventoryChangeForForbidden(ctx, event)
       break
 
@@ -112,7 +77,7 @@ export const processEvent = (ctx: ActivityContext, bot: any, event: ActivityEven
           handleForbiddenDetected(ctx, event, event.itemId, event.item ?? `item ${event.itemId}`, event.count ?? 1, event.blockheadId)
         }
       }
-      markPlayerActive(ctx, resolvedOwner)
+      markPlayerActive(resolvedOwner)
       break
 
     case 'INVENTORY_SNAPSHOT':
@@ -143,7 +108,7 @@ export const processEvent = (ctx: ActivityContext, bot: any, event: ActivityEven
           }
         }
       }
-      markPlayerActive(ctx, resolvedOwner)
+      markPlayerActive(resolvedOwner)
       break
 
     case 'block_placed':
@@ -164,20 +129,14 @@ export const processEvent = (ctx: ActivityContext, bot: any, event: ActivityEven
 // Helpers
 // ============================================================================
 
-const resolveMoveOwner = (ctx: ActivityContext, event: ActivityEvent, ownerAlias: string | null | undefined): string | undefined => {
-  let owner: string | undefined = event.playerAccount ?? ownerAlias ?? event.player
-  if (!owner || owner === '?' || owner.startsWith('Blockhead#')) {
-    if (typeof event.blockheadId === 'number') {
-      const uuid = ctx.blockheadToUuid.get(event.blockheadId)
-      if (uuid) {
-        owner = ctx.uuidToPlayer.get(uuid)
-      }
-    }
+const updateBlockheadCoords = (blockheadId: number, x: number, y: number) => {
+  const player = playerManager.getByBlockheadId(blockheadId)
+  if (!player) return
+  const bh = player.blockheads.get(blockheadId)
+  if (bh) {
+    bh.lastCoords = { x, y, time: Date.now() }
+    player.lastBlockheadId = blockheadId
   }
-  if (owner && owner !== '?' && !owner.startsWith('Blockhead#')) {
-    return owner
-  }
-  return undefined
 }
 
 const checkInventoryChangeForForbidden = (ctx: ActivityContext, event: ActivityEvent) => {
@@ -215,45 +174,28 @@ const resolveUnknownBlockhead = (ctx: ActivityContext, bhId: number) => {
   ctx.pendingOwnerLookups.add(bhId)
 
   ;(async () => {
-    // Fast LMDB key existence check for online players
+    // Fast LMDB check: collect UUIDs for all online players
     const candidateUuids: string[] = []
-    for (const name of ctx.onlinePlayers) {
-      const uuid = ctx.getPlayerUuid(name) ?? ctx.playerToUuid.get(name)
-      if (uuid) candidateUuids.push(uuid)
+    for (const p of playerManager.online()) {
+      if (p.uuid) candidateUuids.push(p.uuid)
     }
 
     if (candidateUuids.length) {
       const ownerUuid = await BlockheadService.findOwnerForBlockheadFast(bhId, candidateUuids)
       if (ownerUuid) {
-        setWithLimit(ctx.blockheadToUuid, bhId, ownerUuid, MAX_PLAYER_CACHE)
-        ctx.blockheadToOwnerUuid.set(bhId, ownerUuid)
-        const ownerName = ctx.uuidToPlayer.get(ownerUuid)
-        if (ownerName) {
-          ctx.blockheadToPlayer.set(bhId, ownerName)
-          const set = ctx.playerToBlockheads.get(ownerName) ?? new Set<number>()
-          set.add(bhId)
-          ctx.playerToBlockheads.set(ownerName, set)
-        }
+        const owner = playerManager.getByUuid(ownerUuid)
+        if (owner) playerManager.attachBlockheads(owner, [bhId])
         return
       }
     }
 
-    const ownerName = await resolveOwnerWithRefresh(
-      bhId,
-      {
-        playerToBlockheads: ctx.playerToBlockheads,
-        playerToUuid: ctx.playerToUuid,
-        uuidToPlayer: ctx.uuidToPlayer,
-        blockheadToUuid: ctx.blockheadToUuid,
-        blockheadToPlayer: ctx.blockheadToPlayer,
-        blockheadToOwnerUuid: ctx.blockheadToOwnerUuid,
-      },
-      ctx.onlinePlayers,
-      async (name, uuid) => { await ctx.listBlockheadsForPlayer(name, uuid) }
-    )
-    if (!ownerName) {
-      ctx.failedOwnerLookups.set(bhId, Date.now())
+    // Full refresh: try each online player
+    for (const p of playerManager.online()) {
+      await ctx.listBlockheadsForPlayer(p.name, p.uuid)
+      if (playerManager.getByBlockheadId(bhId)) return
     }
+
+    ctx.failedOwnerLookups.set(bhId, Date.now())
   })().catch(() => {
     ctx.failedOwnerLookups.set(bhId, Date.now())
   }).finally(() => {
