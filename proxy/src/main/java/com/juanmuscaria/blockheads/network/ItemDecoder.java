@@ -450,17 +450,6 @@ public class ItemDecoder {
     }
 
     /**
-     * Decode 8-byte item data and return [itemId, count] or null if invalid.
-     */
-    public static int[] decodeItemIdAndCount(byte[] data) {
-        int[] decoded = decodeItemIdCountAndExtra(data);
-        if (decoded == null) {
-            return null;
-        }
-        return new int[]{decoded[0], decoded[1]};
-    }
-
-    /**
      * Decode 8-byte item data and return [itemId, count, extra] or null if invalid.
      */
     public static int[] decodeItemIdCountAndExtra(byte[] data) {
@@ -479,18 +468,6 @@ public class ItemDecoder {
         if (itemId == 0) return null; // Empty/invalid item
 
         return new int[]{itemId, count, extra};
-    }
-
-    /**
-     * Decode base64-encoded item data.
-     */
-    public static String decodeBase64Item(String base64) {
-        try {
-            byte[] data = Base64.getDecoder().decode(base64.trim());
-            return decodeItem(data);
-        } catch (Exception e) {
-            return "DECODE_ERROR: " + e.getMessage();
-        }
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.juanmuscaria.blockheads;
 
+import com.juanmuscaria.blockheads.network.BHHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -111,81 +112,6 @@ public class UDSEventServer {
         } catch (IOException ignored) {}
       }
     }
-  }
-
-  /**
-   * Send a player join event.
-   */
-  public void sendPlayerJoin(String playerName, String playerId, String ip) {
-    String json = String.format(
-      "{\"type\":\"join\",\"player\":\"%s\",\"id\":\"%s\",\"ip\":\"%s\",\"time\":%d}",
-      escapeJson(playerName), escapeJson(playerId), escapeJson(ip), System.currentTimeMillis()
-    );
-    broadcast(json);
-  }
-
-  /**
-   * Send a player leave event.
-   */
-  public void sendPlayerLeave(String playerName, String playerId) {
-    String json = String.format(
-      "{\"type\":\"leave\",\"player\":\"%s\",\"id\":\"%s\",\"time\":%d}",
-      escapeJson(playerName), escapeJson(playerId), System.currentTimeMillis()
-    );
-    broadcast(json);
-  }
-
-  /**
-   * Send a chat message event.
-   */
-  public void sendChat(String playerName, String message) {
-    String json = String.format(
-      "{\"type\":\"chat\",\"player\":\"%s\",\"message\":\"%s\",\"time\":%d}",
-      escapeJson(playerName), escapeJson(message), System.currentTimeMillis()
-    );
-    broadcast(json);
-  }
-
-  /**
-   * Send a position update event.
-   */
-  public void sendPosition(String playerName, int blockheadId, double x, double y) {
-    String json = String.format(
-      "{\"type\":\"position\",\"player\":\"%s\",\"blockheadId\":%d,\"x\":%.2f,\"y\":%.2f,\"time\":%d}",
-      escapeJson(playerName), blockheadId, x, y, System.currentTimeMillis()
-    );
-    broadcast(json);
-  }
-
-  /**
-   * Send a command event (player typed /something).
-   */
-  public void sendCommand(String playerName, String command) {
-    String json = String.format(
-      "{\"type\":\"command\",\"player\":\"%s\",\"command\":\"%s\",\"time\":%d}",
-      escapeJson(playerName), escapeJson(command), System.currentTimeMillis()
-    );
-    broadcast(json);
-  }
-
-  /**
-   * Send raw packet info (for debugging/RE).
-   */
-  public void sendPacketInfo(String direction, int packetId, int length) {
-    String json = String.format(
-      "{\"type\":\"packet\",\"direction\":\"%s\",\"packetId\":%d,\"length\":%d,\"time\":%d}",
-      direction, packetId, length, System.currentTimeMillis()
-    );
-    broadcast(json);
-  }
-
-  private static String escapeJson(String s) {
-    if (s == null) return "";
-    return s.replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t");
   }
 
   public int getClientCount() {

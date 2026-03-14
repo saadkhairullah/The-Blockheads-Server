@@ -1,5 +1,6 @@
 package com.juanmuscaria.blockheads;
 
+import com.juanmuscaria.blockheads.network.BHHelper;
 import com.juanmuscaria.blockheads.network.ItemDecoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,15 +100,15 @@ public class EventLogger {
         json.append("{\"type\":\"ITEM_PICKUP\",\"time\":\"").append(Instant.now().toString()).append("\"");
         json.append(",\"blockheadId\":").append(blockheadId);
         if (playerUUID != null && !playerUUID.isEmpty()) {
-            json.append(",\"playerUUID\":\"").append(escapeJson(playerUUID)).append("\"");
+            json.append(",\"playerUUID\":\"").append(BHHelper.escapeJson(playerUUID)).append("\"");
         }
         json.append(",\"x\":").append(x).append(",\"y\":").append(y);
-        json.append(",\"item\":\"").append(escapeJson(itemName)).append("\"");
+        json.append(",\"item\":\"").append(BHHelper.escapeJson(itemName)).append("\"");
         json.append(",\"itemId\":").append(itemId);
         json.append(",\"count\":").append(count);
         json.append(",\"illegal\":").append(isIllegal);
         if (source != null && !source.isEmpty()) {
-            json.append(",\"source\":\"").append(escapeJson(source)).append("\"");
+            json.append(",\"source\":\"").append(BHHelper.escapeJson(source)).append("\"");
         }
         json.append("}");
 
@@ -135,14 +136,14 @@ public class EventLogger {
         json.append("{\"type\":\"ITEM_DROP\",\"time\":\"").append(Instant.now().toString()).append("\"");
         json.append(",\"blockheadId\":").append(blockheadId);
         if (playerUUID != null && !playerUUID.isEmpty()) {
-            json.append(",\"playerUUID\":\"").append(escapeJson(playerUUID)).append("\"");
+            json.append(",\"playerUUID\":\"").append(BHHelper.escapeJson(playerUUID)).append("\"");
         }
         json.append(",\"x\":").append(x).append(",\"y\":").append(y);
-        json.append(",\"item\":\"").append(escapeJson(itemName)).append("\"");
+        json.append(",\"item\":\"").append(BHHelper.escapeJson(itemName)).append("\"");
         json.append(",\"itemId\":").append(itemId);
         json.append(",\"count\":").append(count);
         if (source != null && !source.isEmpty()) {
-            json.append(",\"source\":\"").append(escapeJson(source)).append("\"");
+            json.append(",\"source\":\"").append(BHHelper.escapeJson(source)).append("\"");
         }
         json.append("}");
 
@@ -200,10 +201,10 @@ public class EventLogger {
         json.append("{\"type\":\"INVENTORY_SNAPSHOT\",\"time\":\"").append(Instant.now().toString()).append("\"");
         json.append(",\"blockheadId\":").append(blockheadId);
         if (playerUUID != null && !playerUUID.isEmpty()) {
-            json.append(",\"playerUUID\":\"").append(escapeJson(playerUUID)).append("\"");
+            json.append(",\"playerUUID\":\"").append(BHHelper.escapeJson(playerUUID)).append("\"");
         }
         if (source != null && !source.isEmpty()) {
-            json.append(",\"source\":\"").append(escapeJson(source)).append("\"");
+            json.append(",\"source\":\"").append(BHHelper.escapeJson(source)).append("\"");
         }
         // Only include forbidden items in the snapshot
         json.append(",\"items\":[");
@@ -221,7 +222,7 @@ public class EventLogger {
                 json.append(",");
             }
             first = false;
-            json.append("{\"item\":\"").append(escapeJson(itemName)).append("\"");
+            json.append("{\"item\":\"").append(BHHelper.escapeJson(itemName)).append("\"");
             json.append(",\"itemId\":").append(id);
             json.append(",\"count\":").append(count).append("}");
         }
@@ -234,26 +235,6 @@ public class EventLogger {
     }
 
     /**
-     * Log full player state (for debugging).
-     * Only raw blockheadId is logged - the bot should use LMDB to look up player info.
-     */
-    public void logPlayerState(int blockheadId, int x, int y, String action, String inventoryChange) {
-        StringBuilder json = new StringBuilder();
-        json.append("{\"type\":\"PLAYER_STATE\",\"time\":\"").append(Instant.now().toString()).append("\"");
-        json.append(",\"blockheadId\":").append(blockheadId);
-        json.append(",\"x\":").append(x).append(",\"y\":").append(y);
-        if (action != null) {
-            json.append(",\"action\":\"").append(escapeJson(action)).append("\"");
-        }
-        if (inventoryChange != null) {
-            json.append(",\"invChange\":\"").append(escapeJson(inventoryChange)).append("\"");
-        }
-        json.append("}");
-
-        eventQueue.offer(json.toString());
-    }
-
-    /**
      * Log player using an item/block.
      * Only raw blockheadId is logged - the bot should use LMDB to look up player info.
      */
@@ -262,9 +243,9 @@ public class EventLogger {
         json.append("{\"type\":\"PLAYER_ACTION\",\"time\":\"").append(Instant.now().toString()).append("\"");
         json.append(",\"blockheadId\":").append(blockheadId);
         json.append(",\"x\":").append(x).append(",\"y\":").append(y);
-        json.append(",\"action\":\"").append(escapeJson(action)).append("\"");
+        json.append(",\"action\":\"").append(BHHelper.escapeJson(action)).append("\"");
         if (inventoryChange != null && !inventoryChange.isEmpty()) {
-            json.append(",\"inventoryChange\":\"").append(escapeJson(inventoryChange)).append("\"");
+            json.append(",\"inventoryChange\":\"").append(BHHelper.escapeJson(inventoryChange)).append("\"");
         }
         json.append("}");
 
@@ -277,30 +258,9 @@ public class EventLogger {
     public void logCommand(String playerName, String command) {
         String json = String.format(
             "{\"type\":\"command\",\"player\":\"%s\",\"command\":\"%s\",\"time\":%d}",
-            escapeJson(playerName), escapeJson(command), System.currentTimeMillis()
+            BHHelper.escapeJson(playerName), BHHelper.escapeJson(command), System.currentTimeMillis()
         );
         eventQueue.offer(json);
-    }
-
-    /**
-     * Get current position of a player (for /coords command).
-     */
-    public int[] getPlayerPosition(int blockheadId) {
-        return playerPositions.get(blockheadId);
-    }
-
-    /**
-     * Get all tracked player positions.
-     */
-    public Map<Integer, int[]> getAllPlayerPositions() {
-        return new HashMap<>(playerPositions);
-    }
-
-    /**
-     * Fix 4: Remove position data for a blockhead (call on disconnect).
-     */
-    public void removeBlockheadPosition(int blockheadId) {
-        playerPositions.remove(blockheadId);
     }
 
     /**
@@ -310,12 +270,4 @@ public class EventLogger {
         return playerPositions.size();
     }
 
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
 }

@@ -15,17 +15,6 @@ import java.text.ParseException;
 import static java.util.Arrays.copyOfRange;
 
 public class BHHelper {
-  public static boolean isCompressed(byte[] data) {
-    return isCompressed(data, 0);
-  }
-
-  public static boolean isCompressed(byte[] data, int offset) {
-    if (data.length < offset + 2) {
-      return false;
-    }
-    return (data[offset] == (byte) 0x1F && data[1 + offset] == (byte) 0x8B);
-  }
-
   public static boolean isProbablyCompressed(byte[] data) {
     if (data.length < 2) {
       return false;
@@ -74,5 +63,14 @@ public class BHHelper {
 
   public static String toBhUuid(String javaUuid) {
     return javaUuid.replace("-", "");
+  }
+
+  public static String escapeJson(String s) {
+    if (s == null) return "";
+    return s.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t");
   }
 }
