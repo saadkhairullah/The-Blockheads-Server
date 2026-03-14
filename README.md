@@ -91,8 +91,8 @@ cd bot && npm install && npm run build && cd ..
 # Python tools
 cd tools && pip install -r requirements.txt && cd ..
 
-# Java proxy
-cd proxy && ./gradlew :interceptor:installDist && cd ..
+# Java proxy (no build step needed — Gradle runs it directly)
+# For production, run: cd proxy && ./gradlew :interceptor:installDist && cd ..
 ```
 
 ### 4. Compile the item injection library

@@ -52,8 +52,8 @@ cd bhs
 # Build the bot
 cd bot && npm install && npm run build && cd ..
 
-# Build the proxy
-cd proxy && ./gradlew :interceptor:installDist && cd ..
+# Proxy — no build step needed, Gradle runs it directly
+# (For production/PM2 only: cd proxy && ./gradlew :interceptor:installDist && cd ..)
 
 # Install Python dependencies
 cd tools && pip install -r requirements.txt && cd ..
@@ -224,9 +224,16 @@ What each piece does:
 The proxy intercepts all game UDP traffic and streams events to the bot:
 
 ```bash
+cd /opt/bhs/proxy && ./gradlew :interceptor:run --args='-P 15153 -S 15151 --event-socket /tmp/bh-events-my-world.sock --command-socket /tmp/bh-commands-my-world.sock'
+```
+
+For production (PM2/systemd), build a standalone launcher first and use that instead:
+
+```bash
+cd /opt/bhs/proxy && ./gradlew :interceptor:installDist
+# then run:
 /opt/bhs/proxy/interceptor/build/install/interceptor/bin/interceptor \
-  -P 15153 \
-  -S 15151 \
+  -P 15153 -S 15151 \
   --event-socket /tmp/bh-events-my-world.sock \
   --command-socket /tmp/bh-commands-my-world.sock
 ```
@@ -272,9 +279,12 @@ pm2 save
 pm2 startup   # follow the printed command to install the init script
 ```
 
-For the proxy, create a small wrapper script so PM2 can manage it:
+For the proxy, build the standalone launcher first (only needed once), then create a wrapper script so PM2 can manage it:
 
 ```bash
+# One-time build (required before PM2 can use the launcher)
+cd /opt/bhs/proxy && ./gradlew :interceptor:installDist && cd -
+
 cat > /worlds/my-world/start-proxy.sh << 'EOF'
 #!/bin/bash
 exec /opt/bhs/proxy/interceptor/build/install/interceptor/bin/interceptor \
