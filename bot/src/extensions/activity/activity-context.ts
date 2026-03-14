@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { config } from '../../config'
+import type { AppConfig } from '../../config'
 import { playerManager } from '../helpers/blockhead-mapping'
 
 // ============================================================================
@@ -10,15 +10,11 @@ export const LOG_BOT_DEBUG = process.env.BH_LOG_BOT_DEBUG === '1'
 export const LOG_ACTIVITY_EVENTS = process.env.BH_LOG_ACTIVITY_EVENTS === '1'
 export const LOG_BLOCKHEAD_MAP = process.env.BH_LOG_BLOCKHEAD_MAP === '1'
 
-export const SUSPICIOUS_LOG_PATH = join(config.paths.dataDir, 'suspicious-portal-chest.jsonl')
-export const PORTAL_CHEST_BUYERS_PATH = join(config.paths.dataDir, 'portal-chest-buyers.json')
-
 export const MAX_PENDING_UUIDS = 200
 export const BLOCKHEAD_REFRESH_INTERVAL_MS = 10000
 export const ACTIVE_PLAYER_WINDOW_MS = 120000
 export const FAILED_LOOKUP_COOLDOWN = 10 * 1000
 
-export const FORBIDDEN_ITEM_IDS = new Set(config.game.forbiddenItemIds)
 
 // ============================================================================
 // ActivityContext — shared state passed to all sub-modules
@@ -26,6 +22,11 @@ export const FORBIDDEN_ITEM_IDS = new Set(config.game.forbiddenItemIds)
 
 export interface ActivityContext {
   bot: { send: (msg: string) => void }
+
+  // Config-derived paths and sets (computed at factory time)
+  suspiciousLogPath: string
+  portalChestBuyersPath: string
+  forbiddenItemIds: Set<number>
 
   // Forbidden items state
   portalChestBuyers: Set<string>
@@ -44,9 +45,13 @@ export interface ActivityContext {
   savePortalChestBuyers: () => Promise<void>
 }
 
-export function createActivityContext(bot: any): ActivityContext {
+export function createActivityContext(bot: any, cfg: AppConfig): ActivityContext {
   return {
     bot,
+
+    suspiciousLogPath: join(cfg.paths.dataDir, 'suspicious-portal-chest.jsonl'),
+    portalChestBuyersPath: join(cfg.paths.dataDir, 'portal-chest-buyers.json'),
+    forbiddenItemIds: new Set(cfg.game.forbiddenItemIds),
 
     portalChestBuyers: new Set(),
     pendingForbiddenByUuid: new Map(),

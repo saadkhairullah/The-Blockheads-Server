@@ -1,7 +1,8 @@
 import { MessageBot } from '@bhmb/bot'
 import { join } from 'path'
 import { appendFile } from 'fs/promises'
-import { config, ShopItemConfig } from '../../config'
+import type { AppConfig, ShopItemConfig } from '../../config'
+import type { BotContext, ExtensionFactory } from '../../bot-context'
 import { enqueueShared } from '../../shared-queue'
 import * as BlockheadService from '../../blockhead-service'
 import { sendPrivateMessage } from '../../private-message'
@@ -10,21 +11,24 @@ import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
 
 type ShopItem = ShopItemConfig
 
-const SHOP_ITEMS: ShopItem[] = config.shop
 const UNKNOWN_PRICE = 50
 const UNKNOWN_IDS = [
   11900, 3245, 3203, 3202, 3201, 3200, 2170, 9, 3204, 810, 813, 514, 513,
   512, 256, 172, 171, 131, 129, 128, 125, 123, 118, 116, 114, 113, 108, 211,
   107, 226, 18, 10, 5, 2, 1027, 1035, 106, 45, 1041, 1040, 1039, 1047
 ]
-const unknownItems: ShopItem[] = UNKNOWN_IDS.map((id, i) => ({
-  key: `unknown_${i}`, name: 'Unknown Item', itemId: id, price: UNKNOWN_PRICE, count: 1
-}))
-MessageBot.registerExtension('shop-system', (ex) => {
+
+export const ShopSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): string => {
+  const SHOP_ITEMS: ShopItem[] = cfg.shop
+  const unknownItems: ShopItem[] = UNKNOWN_IDS.map((id, i) => ({
+    key: `unknown_${i}`, name: 'Unknown Item', itemId: id, price: UNKNOWN_PRICE, count: 1
+  }))
+
+  MessageBot.registerExtension('shop-system', (ex) => {
   console.log('Shop System extension loaded!')
 
-  const shopLogPath = join(config.paths.dataDir, 'shop-purchases.jsonl')
-  const shutdownFlagPath = join(config.paths.dataDir, '.bot-shutdown-pending')
+  const shopLogPath = join(cfg.paths.dataDir, 'shop-purchases.jsonl')
+  const shutdownFlagPath = join(cfg.paths.dataDir, '.bot-shutdown-pending')
 
   const getBankAPI = () => _getBankAPI(ex.bot)
   const getActivityMonitorAPI = () => _getActivityMonitorAPI(ex.bot)
@@ -378,4 +382,8 @@ MessageBot.registerExtension('shop-system', (ex) => {
   ex.remove = () => {
     console.log('Shop System stopped')
   }
-})
+  })
+  return 'shop-system'
+}
+ShopSystem.extensionName = 'shop-system'
+ShopSystem.requires = ['virtual-bank', 'activity-monitor']

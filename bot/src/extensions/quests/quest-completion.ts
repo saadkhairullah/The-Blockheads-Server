@@ -1,5 +1,5 @@
 // @ts-ignore — CURRENT_QUEST_VERSION, LAST_OLD_QUEST_ID, FIRST_NEW_QUEST_ID will be used in upcoming kill quest update
-import { QuestContext, Quest, QuestRequirement, QuestReward, LOG_QUEST_CACHE, LOG_BOT_DEBUG, ACTIVE_BLOCKHEAD_WINDOW_MS, SHUTDOWN_FLAG_PATH, CURRENT_QUEST_VERSION, LAST_OLD_QUEST_ID, FIRST_NEW_QUEST_ID } from './quest-context'
+import { QuestContext, Quest, QuestRequirement, QuestReward, LOG_QUEST_CACHE, LOG_BOT_DEBUG, ACTIVE_BLOCKHEAD_WINDOW_MS, CURRENT_QUEST_VERSION, LAST_OLD_QUEST_ID, FIRST_NEW_QUEST_ID } from './quest-context'
 import { playerManager } from '../helpers/blockhead-mapping'
 import { sendPrivateMessage } from '../../private-message'
 import * as BlockheadService from '../../blockhead-service'
@@ -7,10 +7,10 @@ import { getBankAPI as _getBankAPI, getActivityMonitorAPI as _getActivityMonitor
 import { getCurrentQuest, getPlayerProgress, markQuestCompleted, addToPendingRewards } from './quest-persistence'
 import { getKnownBlockheadsForPlayer, resolveBlockheadId, ensureBlockheadOwner, findBlockheadsWithItems, getBlockheadForPlayer } from './quest-resolver'
 
-const isShuttingDown = (): boolean => {
+const isShuttingDown = (ctx: QuestContext): boolean => {
   try {
     const { existsSync } = require('fs')
-    return existsSync(SHUTDOWN_FLAG_PATH)
+    return existsSync(ctx.shutdownFlagPath)
   } catch {
     return false
   }
@@ -183,7 +183,7 @@ const applyQuestItemsByBlockhead = async (blockheadId: number, removeItems: Arra
 }
 
 const completeQuest = async (ctx: QuestContext, playerName: string, quest: Quest) => {
-  if (isShuttingDown()) {
+  if (isShuttingDown(ctx)) {
     console.log(`[Quest System] Shutdown pending - blocking quest completion for ${playerName}`)
     return
   }

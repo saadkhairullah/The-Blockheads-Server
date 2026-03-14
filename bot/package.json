@@ -2,7 +2,14 @@
   "name": "blockheads-server-bot",
   "version": "1.0.0",
   "description": "Bot for The Blockheads game servers — quests, shop, teleport, jobs, activity monitoring, and more.",
-  "main": "build/mac.js",
+  "main": "build/index.js",
+  "types": "build/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./build/index.js",
+      "types": "./build/index.d.ts"
+    }
+  },
   "author": "Saad",
   "license": "MIT",
   "dependencies": {

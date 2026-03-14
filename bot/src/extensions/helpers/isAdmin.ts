@@ -1,14 +1,12 @@
 import { readFile } from "fs/promises"
 import { join } from "path"
 import { watch } from "fs"
-import { config } from '../../config'
-
-const adminListPath = join(config.paths.worldSave, "adminlist.txt")
 
 // Admin allowlist - loaded from adminlist.txt (case-insensitive)
 let adminAllowlist: Set<string> = new Set()
 
-export const loadAdminList = async () => {
+export const loadAdminList = async (worldSavePath: string) => {
+    const adminListPath = join(worldSavePath, "adminlist.txt")
     try {
       const content = await readFile(adminListPath, 'utf8')
       const lines = content.split('\n')
@@ -24,10 +22,11 @@ export const loadAdminList = async () => {
     }
   }
 
-export const watchAdminList = () => {
+export const watchAdminList = (worldSavePath: string) => {
+  const adminListPath = join(worldSavePath, "adminlist.txt")
   try {
     watch(adminListPath, { persistent: false }, () => {
-      void loadAdminList()
+      void loadAdminList(worldSavePath)
     })
   } catch (err) {
     console.error('[AdminList] Failed to watch adminlist.txt:', err)

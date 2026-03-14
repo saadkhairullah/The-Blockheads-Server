@@ -1,7 +1,8 @@
 import { MessageBot } from '@bhmb/bot'
 import { join } from 'path'
 import { readFile, writeFile } from 'fs/promises'
-import { config } from '../config'
+import type { AppConfig } from '../config'
+import type { BotContext, ExtensionFactory } from '../bot-context'
 import * as BlockheadService from '../blockhead-service'
 import { sendPrivateMessage } from '../private-message'
 import { attachBlockheadsToPlayer, normalizePlayerName, playerManager } from './helpers/blockhead-mapping'
@@ -20,10 +21,11 @@ import {
 import { registerCoordsCommand, cleanupCoordsMaps } from './activity/coords-tracker'
 import { startWatching } from './activity/activity-events'
 
-MessageBot.registerExtension('activity-monitor', (ex) => {
+export const ActivityMonitor: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): string => {
+  MessageBot.registerExtension('activity-monitor', (ex) => {
   console.log('Activity Monitor extension loaded!')
 
-  const ctx = createActivityContext(ex.bot)
+  const ctx = createActivityContext(ex.bot, cfg)
 
   // Load portal chest buyers on startup
   loadPortalChestBuyers(ctx)
@@ -88,7 +90,7 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   // Tracked blockhead selection — /tracked and /track <n>
   // -------------------------------------------------------------------------
 
-  const TRACKED_BH_PATH = join(config.paths.dataDir, 'tracked-blockheads.json')
+  const TRACKED_BH_PATH = join(cfg.paths.dataDir, 'tracked-blockheads.json')
 
   // Local map of user-selected tracked blockheads (persisted to disk)
   const trackedSelections = new Map<string, number>()
@@ -353,4 +355,8 @@ MessageBot.registerExtension('activity-monitor', (ex) => {
   ex.remove = () => {
     console.log('Activity Monitor stopped')
   }
-})
+  })
+  return 'activity-monitor'
+}
+ActivityMonitor.extensionName = 'activity-monitor'
+ActivityMonitor.requires = []

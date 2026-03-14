@@ -143,12 +143,10 @@ class WMClient {
   }
 }
 
-let wmClient: WMClient | null = null
+export { WMClient }
 
-export function getWMClient(socketPath = '/tmp/bh-wm.sock'): WMClient {
-  if (!wmClient) {
-    wmClient = new WMClient(socketPath)
-    wmClient.connect()
-  }
-  return wmClient
+export function createWMClient(socketPath: string): WMClient {
+  const client = new WMClient(socketPath)
+  client.connect()
+  return client
 }

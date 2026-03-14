@@ -7,7 +7,6 @@ import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
 import { ActivityEvent } from '../types/shared-types'
 import {
   ActivityContext, LOG_BOT_DEBUG, MAX_PENDING_UUIDS,
-  FORBIDDEN_ITEM_IDS, SUSPICIOUS_LOG_PATH, PORTAL_CHEST_BUYERS_PATH,
   pruneMap, sleep,
 } from './activity-context'
 
@@ -17,7 +16,7 @@ import {
 
 export const loadPortalChestBuyers = async (ctx: ActivityContext) => {
   try {
-    const content = await readFile(PORTAL_CHEST_BUYERS_PATH, 'utf8')
+    const content = await readFile(ctx.portalChestBuyersPath, 'utf8')
     const data = JSON.parse(content)
     ctx.portalChestBuyers = new Set((data.buyers || []).map((n: string) => n.toLowerCase()))
     console.log(`[Activity Monitor] Loaded ${ctx.portalChestBuyers.size} portal chest buyers`)
@@ -31,7 +30,7 @@ export const loadPortalChestBuyers = async (ctx: ActivityContext) => {
 export const savePortalChestBuyers = async (ctx: ActivityContext) => {
   try {
     const data = { buyers: Array.from(ctx.portalChestBuyers), updatedAt: new Date().toISOString() }
-    await writeFile(PORTAL_CHEST_BUYERS_PATH, JSON.stringify(data, null, 2), 'utf8')
+    await writeFile(ctx.portalChestBuyersPath, JSON.stringify(data, null, 2), 'utf8')
   } catch (err) {
     console.error('[Activity Monitor] Failed to save portal chest buyers:', err)
   }
@@ -63,9 +62,9 @@ export const isAllowedForbiddenItems = (ctx: ActivityContext, playerName: string
 // Enforcement helpers
 // ============================================================================
 
-const logSuspiciousRemoval = async (payload: Record<string, unknown>) => {
+const logSuspiciousRemoval = async (ctx: ActivityContext, payload: Record<string, unknown>) => {
   try {
-    await appendFile(SUSPICIOUS_LOG_PATH, `${JSON.stringify(payload)}\n`, 'utf8')
+    await appendFile(ctx.suspiciousLogPath, `${JSON.stringify(payload)}\n`, 'utf8')
   } catch (err) {
     console.error('[Activity Monitor] Failed to write suspicious log:', err)
   }
@@ -193,7 +192,7 @@ export const enforceForbiddenForPlayer = async (
   if (verifyFirst) {
     const resolved = await resolveBlockheadForRemoval(ctx, playerName, blockheadId, itemId)
     if (resolved === null) {
-      logSuspiciousRemoval({
+      logSuspiciousRemoval(ctx, {
         time: new Date().toISOString(),
         player: playerName,
         itemId, itemName, blockheadId,
@@ -227,7 +226,7 @@ export const enforceForbiddenForPlayer = async (
       }
     } else {
       console.warn(`[Activity Monitor] Failed to remove ${itemName} from ${playerName} after all retries - unbanning anyway`)
-      await logSuspiciousRemoval({
+      await logSuspiciousRemoval(ctx, {
         time: new Date().toISOString(),
         player: playerName,
         itemId, itemName, blockheadId,
@@ -285,7 +284,7 @@ export const handleForbiddenDetected = async (
   count: number,
   blockheadId?: number
 ) => {
-  if (!FORBIDDEN_ITEM_IDS.has(itemId)) return
+  if (!ctx.forbiddenItemIds.has(itemId)) return
 
   const playerName = playerManager.resolveEventPlayer(event)
     ?? (typeof blockheadId === 'number' ? playerManager.getByBlockheadId(blockheadId)?.name ?? null : null)

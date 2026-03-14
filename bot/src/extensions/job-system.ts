@@ -1,7 +1,8 @@
 import { MessageBot } from '@bhmb/bot'
 import { join } from 'path'
 import { readFile, writeFile, appendFile } from 'fs/promises'
-import { config } from '../config'
+import type { AppConfig } from '../config'
+import type { BotContext, ExtensionFactory } from '../bot-context'
 import { sendPrivateMessage } from '../private-message'
 import { normalizePlayerName } from './helpers/blockhead-mapping'
 import { getBankAPI as _getBankAPI, getQuestAPI as _getQuestAPI } from './helpers/extension-api'
@@ -63,18 +64,19 @@ interface EmployeeRecord {
   lastFlagAt: number | null
 }
 
-MessageBot.registerExtension('job-system', (ex) => {
+export const JobSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): string => {
+  MessageBot.registerExtension('job-system', (ex) => {
   console.log('Job System extension loaded!')
 
-  const applicationsPath = join(config.paths.dataDir, 'job-applications.jsonl')
-  const actionsPath = join(config.paths.dataDir, 'job-actions.jsonl')
-  const reportsPath = join(config.paths.dataDir, 'job-reports.jsonl')
-  const flagsPath = join(config.paths.dataDir, 'job-flags.jsonl')
-  const employeesPath = join(config.paths.dataDir, 'job-employees.json')
+  const applicationsPath = join(cfg.paths.dataDir, 'job-applications.jsonl')
+  const actionsPath = join(cfg.paths.dataDir, 'job-actions.jsonl')
+  const reportsPath = join(cfg.paths.dataDir, 'job-reports.jsonl')
+  const flagsPath = join(cfg.paths.dataDir, 'job-flags.jsonl')
+  const employeesPath = join(cfg.paths.dataDir, 'job-employees.json')
 
   // Build JOBS record from config
   const JOBS: Record<JobKey, JobDefinition> = {}
-  for (const job of config.jobs) {
+  for (const job of cfg.jobs) {
     JOBS[job.key] = { key: job.key, name: job.name, dailyPay: job.dailyPay }
   }
 
@@ -400,4 +402,8 @@ MessageBot.registerExtension('job-system', (ex) => {
     if (payTimer) clearInterval(payTimer)
     console.log('Job System stopped')
   }
-})
+  })
+  return 'job-system'
+}
+JobSystem.extensionName = 'job-system'
+JobSystem.requires = ['virtual-bank']

@@ -1,30 +1,29 @@
 import { readFile, writeFile, stat, mkdir, rename } from 'fs/promises'
 import {
   QuestContext, PlayerQuestProgress, PendingReward, Quest,
-  QUEST_DATA_PATH, PENDING_REWARDS_PATH, BACKUP_DIR,
   AUTO_SAVE_INTERVAL, BACKUP_INTERVAL, LOG_BOT_DEBUG,
   // @ts-ignore — LAST_OLD_QUEST_ID, FIRST_NEW_QUEST_ID will be used in upcoming quest migration
   CURRENT_QUEST_VERSION, LAST_OLD_QUEST_ID, FIRST_NEW_QUEST_ID,
 } from './quest-context'
 
-const questBackupPath = `${BACKUP_DIR}/quest-progress-backup.json`
+const questBackupPath = (ctx: QuestContext) => `${ctx.backupDir}/quest-progress-backup.json`
 
 // Debounce: coalesce rapid save calls into one disk write per 500ms window
 let debounceTimer: NodeJS.Timeout | null = null
 let saveInProgress = false
 
-const ensureBackupDir = async () => {
+const ensureBackupDir = async (ctx: QuestContext) => {
   try {
-    await stat(BACKUP_DIR)
+    await stat(ctx.backupDir)
   } catch {
-    await mkdir(BACKUP_DIR, { recursive: true })
-    console.log(`[Quest System] Created backup directory: ${BACKUP_DIR}`)
+    await mkdir(ctx.backupDir, { recursive: true })
+    console.log(`[Quest System] Created backup directory: ${ctx.backupDir}`)
   }
 }
 
 export const loadQuestProgress = async (ctx: QuestContext) => {
   try {
-    const data = await readFile(QUEST_DATA_PATH, 'utf8')
+    const data = await readFile(ctx.questDataPath, 'utf8')
     const parsed = JSON.parse(data) as Record<string, PlayerQuestProgress>
     for (const [player, progress] of Object.entries(parsed)) {
       ctx.playerProgress.set(player, progress)
@@ -37,7 +36,7 @@ export const loadQuestProgress = async (ctx: QuestContext) => {
       console.error(`[Quest System] ERROR loading quest progress: ${err.message}`)
       console.log('[Quest System] Attempting to load from backup...')
       try {
-        const backupData = await readFile(questBackupPath, 'utf8')
+        const backupData = await readFile(questBackupPath(ctx), 'utf8')
         const parsed = JSON.parse(backupData) as Record<string, PlayerQuestProgress>
         for (const [player, progress] of Object.entries(parsed)) {
           ctx.playerProgress.set(player, progress)
@@ -62,9 +61,9 @@ const _doSave = async (ctx: QuestContext) => {
   const jsonData = JSON.stringify(obj, null, 2)
 
   try {
-    const tempPath = QUEST_DATA_PATH + '.tmp'
+    const tempPath = ctx.questDataPath + '.tmp'
     await writeFile(tempPath, jsonData)
-    await rename(tempPath, QUEST_DATA_PATH)
+    await rename(tempPath, ctx.questDataPath)
     console.log(`[Quest System] Saved progress for ${ctx.playerProgress.size} players`)
   } catch (err: any) {
     console.error(`[Quest System] ERROR saving quest progress: ${err.message}`)
@@ -85,7 +84,7 @@ const saveBackup = async (ctx: QuestContext) => {
   if (ctx.playerProgress.size === 0) return
 
   try {
-    await ensureBackupDir()
+    await ensureBackupDir(ctx)
     const obj: Record<string, PlayerQuestProgress> = {}
     for (const [player, progress] of ctx.playerProgress.entries()) {
       obj[player] = progress
@@ -93,9 +92,9 @@ const saveBackup = async (ctx: QuestContext) => {
     const jsonData = JSON.stringify(obj, null, 2)
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const timestampedPath = `${BACKUP_DIR}/quest-progress-${timestamp}.json`
+    const timestampedPath = `${ctx.backupDir}/quest-progress-${timestamp}.json`
     await writeFile(timestampedPath, jsonData)
-    await writeFile(questBackupPath, jsonData)
+    await writeFile(questBackupPath(ctx), jsonData)
 
     console.log(`[Quest System] Hourly backup saved: ${timestampedPath}`)
   } catch (err: any) {
@@ -105,7 +104,7 @@ const saveBackup = async (ctx: QuestContext) => {
 
 export const loadPendingRewards = async (ctx: QuestContext) => {
   try {
-    const data = await readFile(PENDING_REWARDS_PATH, 'utf8')
+    const data = await readFile(ctx.pendingRewardsPath, 'utf8')
     const parsed = JSON.parse(data) as Record<string, PendingReward[]>
     for (const [player, rewards] of Object.entries(parsed)) {
       ctx.pendingRewards.set(player, rewards)
@@ -123,7 +122,7 @@ export const savePendingRewards = async (ctx: QuestContext) => {
       obj[player] = rewards
     }
   }
-  await writeFile(PENDING_REWARDS_PATH, JSON.stringify(obj, null, 2))
+  await writeFile(ctx.pendingRewardsPath, JSON.stringify(obj, null, 2))
 }
 
 export const markQuestCompleted = (ctx: QuestContext, playerName: string, quest: Quest) => {

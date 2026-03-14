@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, dirname } from 'path'
 import { exit } from 'process'
 
 // ============================================================================
@@ -17,11 +17,12 @@ export interface AppConfig {
     worldSave: string
     python: string
     wildLocations: string
-    privateMessages: string
-    commandEvents: string
+    proxyCommandSock: string
     serverLog: string
     inputPipe: string
     dataDir: string
+    wmSock: string
+    questData: string
   }
   game: {
     spawn: { x: number; y: number }
@@ -62,25 +63,37 @@ export interface JobConfig {
 // Config Loading
 // ============================================================================
 
-const CONFIG_SEARCH_PATHS = [
+const DEFAULT_CONFIG_SEARCH_PATHS = [
   join(__dirname, '..', '..', 'config', 'config.json'),  // monorepo root: config/config.json
   join(__dirname, '..', 'config', 'config.json'),         // bot/config/config.json (legacy)
 ]
 
-function loadConfigFile(): any {
-  for (const configPath of CONFIG_SEARCH_PATHS) {
-    if (existsSync(configPath)) {
+function loadRawConfig(configPath?: string): { parsed: any; rootDir: string } {
+  if (configPath) {
+    try {
+      const raw = readFileSync(configPath, 'utf8')
+      console.log(`[Config] Loaded config from ${configPath}`)
+      return { parsed: JSON.parse(raw), rootDir: resolve(dirname(configPath), '..') }
+    } catch (err) {
+      console.error(`[Config] Failed to parse ${configPath}:`, err)
+      exit(1)
+    }
+  }
+
+  for (const p of DEFAULT_CONFIG_SEARCH_PATHS) {
+    if (existsSync(p)) {
       try {
-        const raw = readFileSync(configPath, 'utf8')
-        console.log(`[Config] Loaded config from ${configPath}`)
-        return JSON.parse(raw)
+        const raw = readFileSync(p, 'utf8')
+        console.log(`[Config] Loaded config from ${p}`)
+        return { parsed: JSON.parse(raw), rootDir: resolve(__dirname, '..', '..') }
       } catch (err) {
-        console.error(`[Config] Failed to parse ${configPath}:`, err)
+        console.error(`[Config] Failed to parse ${p}:`, err)
         exit(1)
       }
     }
   }
-  console.error('[Config] No config.json found. Searched:', CONFIG_SEARCH_PATHS.join(', '))
+
+  console.error('[Config] No config.json found. Searched:', DEFAULT_CONFIG_SEARCH_PATHS.join(', '))
   console.error('[Config] Copy config/config.example.json to config/config.json and fill in your values.')
   exit(1)
 }
@@ -96,67 +109,75 @@ function envNumOr(envKey: string, fallback: number): number {
   return Number.isNaN(num) ? fallback : num
 }
 
-const parsed = loadConfigFile()
+// ============================================================================
+// Factory — creates an isolated AppConfig from a given path (or auto-discovers)
+// External callers (hosting service, tests) use this to get per-instance configs
+// ============================================================================
 
-// Resolve paths relative to the monorepo root (two levels up from bot/build/)
-const rootDir = resolve(__dirname, '..', '..')
-const resolvePath = (p: string): string => {
-  if (!p) return p
-  if (p.startsWith('/') || p.startsWith('~')) return p
-  return resolve(rootDir, p)
+export function loadConfig(configPath?: string): AppConfig {
+  const { parsed, rootDir } = loadRawConfig(configPath)
+
+  const resolvePath = (p: string): string => {
+    if (!p) return p
+    if (p.startsWith('/') || p.startsWith('~')) return p
+    return resolve(rootDir, p)
+  }
+
+  return {
+    server: {
+      user: envOr('BH_SERVER_USER', parsed.server?.user ?? ''),
+      pass: envOr('BH_SERVER_PASS', parsed.server?.pass ?? ''),
+      worldName: envOr('BH_WORLD_NAME', parsed.server?.worldName ?? ''),
+      worldId: envOr('BH_WORLD_ID', parsed.server?.worldId ?? ''),
+    },
+    paths: {
+      worldSave: resolvePath(envOr('BH_WORLD_SAVE_PATH', parsed.paths?.worldSave ?? '')),
+      python: envOr('BH_PYTHON_PATH', parsed.paths?.python ?? 'python3'),
+      wildLocations: resolvePath(envOr('BH_WILD_LOCATIONS_PATH', parsed.paths?.wildLocations ?? './tools/wild_locations.py')),
+      proxyCommandSock: envOr('BH_COMMAND_SOCKET', parsed.paths?.proxyCommandSock ?? '/tmp/bh-commands.sock'),
+      serverLog: resolvePath(envOr('BH_SERVER_LOG_PATH', parsed.paths?.serverLog ?? './data/blockheads.log')),
+      inputPipe: resolvePath(envOr('BH_INPUT_PIPE_PATH', parsed.paths?.inputPipe ?? './data/blockheads_input')),
+      dataDir: resolvePath(envOr('BH_DATA_DIR', parsed.paths?.dataDir ?? './data')),
+      wmSock: envOr('BH_WM_SOCK', parsed.paths?.wmSock ?? '/tmp/bh-wm.sock'),
+      questData: resolvePath(envOr('BH_QUEST_DATA_PATH', parsed.paths?.questData ?? './config/quest-data.json')),
+    },
+    game: {
+      spawn: {
+        x: envNumOr('BH_SPAWN_X', parsed.game?.spawn?.x ?? 0),
+        y: envNumOr('BH_SPAWN_Y', parsed.game?.spawn?.y ?? 0),
+      },
+      arena: {
+        x: envNumOr('BH_ARENA_X', parsed.game?.arena?.x ?? 0),
+        y: envNumOr('BH_ARENA_Y', parsed.game?.arena?.y ?? 0),
+        radius: envNumOr('BH_ARENA_RADIUS', parsed.game?.arena?.radius ?? 50),
+      },
+      forbiddenItemIds: parsed.game?.forbiddenItemIds ?? [1074, 206, 300],
+    },
+    economy: {
+      wildCost: envNumOr('BH_WILD_COST', parsed.economy?.wildCost ?? 25),
+      wildCooldownMs: envNumOr('BH_WILD_COOLDOWN_MS', parsed.economy?.wildCooldownMs ?? 300000),
+      wildMinY: envNumOr('BH_WILD_MIN_Y', parsed.economy?.wildMinY ?? 521),
+      wildMaxY: envNumOr('BH_WILD_MAX_Y', parsed.economy?.wildMaxY ?? 600),
+      wildMinSpawnDistance: envNumOr('BH_WILD_MIN_SPAWN_DISTANCE', parsed.economy?.wildMinSpawnDistance ?? 5000),
+      tpaCost: envNumOr('BH_TPA_COST', parsed.economy?.tpaCost ?? 0),
+      tpaCooldownMs: envNumOr('BH_TPA_COOLDOWN_MS', parsed.economy?.tpaCooldownMs ?? 60000),
+      tpaExpireMs: envNumOr('BH_TPA_EXPIRE_MS', parsed.economy?.tpaExpireMs ?? 90000),
+      dailyReward: envNumOr('BH_DAILY_REWARD', parsed.economy?.dailyReward ?? 200),
+    },
+    shop: parsed.shop ?? [
+      { key: 'diamond', name: 'Diamond', itemId: 88, price: 400, count: 1 },
+    ],
+    jobs: parsed.jobs ?? [
+      { key: 'PUBLIC_BUILDER', name: 'Public Builder', dailyPay: 200 },
+    ],
+  }
 }
 
 // ============================================================================
-// Build the typed config with env var overrides
+// Singleton — single-deployment convenience, calls the factory once
 // ============================================================================
 
-export const config: AppConfig = {
-  server: {
-    user: envOr('BH_SERVER_USER', parsed.server?.user ?? ''),
-    pass: envOr('BH_SERVER_PASS', parsed.server?.pass ?? ''),
-    worldName: envOr('BH_WORLD_NAME', parsed.server?.worldName ?? ''),
-    worldId: envOr('BH_WORLD_ID', parsed.server?.worldId ?? ''),
-  },
-  paths: {
-    worldSave: resolvePath(envOr('BH_WORLD_SAVE_PATH', parsed.paths?.worldSave ?? '')),
-    python: envOr('BH_PYTHON_PATH', parsed.paths?.python ?? 'python3'),
-    wildLocations: resolvePath(envOr('BH_WILD_LOCATIONS_PATH', parsed.paths?.wildLocations ?? './tools/wild_locations.py')),
-    privateMessages: resolvePath(envOr('BH_PRIVATE_MSG_PATH', parsed.paths?.privateMessages ?? './data/private_messages.jsonl')),
-    commandEvents: resolvePath(envOr('BH_COMMAND_EVENTS_PATH', parsed.paths?.commandEvents ?? './data/command_events.jsonl')),
-    serverLog: resolvePath(envOr('BH_SERVER_LOG_PATH', parsed.paths?.serverLog ?? './data/blockheads.log')),
-    inputPipe: resolvePath(envOr('BH_INPUT_PIPE_PATH', parsed.paths?.inputPipe ?? './data/blockheads_input')),
-    dataDir: resolvePath(envOr('BH_DATA_DIR', parsed.paths?.dataDir ?? './data')),
-  },
-  game: {
-    spawn: {
-      x: envNumOr('BH_SPAWN_X', parsed.game?.spawn?.x ?? 0),
-      y: envNumOr('BH_SPAWN_Y', parsed.game?.spawn?.y ?? 0),
-    },
-    arena: {
-      x: envNumOr('BH_ARENA_X', parsed.game?.arena?.x ?? 0),
-      y: envNumOr('BH_ARENA_Y', parsed.game?.arena?.y ?? 0),
-      radius: envNumOr('BH_ARENA_RADIUS', parsed.game?.arena?.radius ?? 50),
-    },
-    forbiddenItemIds: parsed.game?.forbiddenItemIds ?? [1074, 206, 300],
-  },
-  economy: {
-    wildCost: envNumOr('BH_WILD_COST', parsed.economy?.wildCost ?? 25),
-    wildCooldownMs: envNumOr('BH_WILD_COOLDOWN_MS', parsed.economy?.wildCooldownMs ?? 300000),
-    wildMinY: envNumOr('BH_WILD_MIN_Y', parsed.economy?.wildMinY ?? 521),
-    wildMaxY: envNumOr('BH_WILD_MAX_Y', parsed.economy?.wildMaxY ?? 600),
-    wildMinSpawnDistance: envNumOr('BH_WILD_MIN_SPAWN_DISTANCE', parsed.economy?.wildMinSpawnDistance ?? 5000),
-    tpaCost: envNumOr('BH_TPA_COST', parsed.economy?.tpaCost ?? 0),
-    tpaCooldownMs: envNumOr('BH_TPA_COOLDOWN_MS', parsed.economy?.tpaCooldownMs ?? 60000),
-    tpaExpireMs: envNumOr('BH_TPA_EXPIRE_MS', parsed.economy?.tpaExpireMs ?? 90000),
-    dailyReward: envNumOr('BH_DAILY_REWARD', parsed.economy?.dailyReward ?? 200),
-  },
-  shop: parsed.shop ?? [
-    { key: 'diamond', name: 'Diamond', itemId: 88, price: 400, count: 1 },
-  ],
-  jobs: parsed.jobs ?? [
-    { key: 'PUBLIC_BUILDER', name: 'Public Builder', dailyPay: 200 },
-  ],
-}
+export const config: AppConfig = loadConfig()
 
 // ============================================================================
 // Legacy exports (for existing config.ts consumers)

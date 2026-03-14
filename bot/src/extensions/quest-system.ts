@@ -1,4 +1,6 @@
 import { MessageBot } from '@bhmb/bot'
+import type { AppConfig } from '../config'
+import type { BotContext, ExtensionFactory } from '../bot-context'
 import { playerManager, listBlockheadsForPlayerByUuid } from './helpers/blockhead-mapping'
 import { setKillCallback } from '../linux-api'
 
@@ -11,10 +13,11 @@ import { registerQuestCommands } from './quests/quest-commands'
 import { startWatching, cleanupEventState } from './quests/quest-events'
 import { processKillEvent } from './quests/quest-kills'
 
-MessageBot.registerExtension('quest-system', (ex) => {
+export const QuestSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): string => {
+  MessageBot.registerExtension('quest-system', (ex) => {
   console.log('Quest System extension loaded!')
 
-  const ctx = createQuestContext(ex)
+  const ctx = createQuestContext(ex, cfg)
 
   // Wire cross-module function references on the context
   ctx.checkQuestCompletion = (playerName: string) => checkQuestCompletion(ctx, playerName)
@@ -211,4 +214,8 @@ MessageBot.registerExtension('quest-system', (ex) => {
     savePendingRewards(ctx)
     console.log('Quest System stopped')
   }
-})
+  })
+  return 'quest-system'
+}
+QuestSystem.extensionName = 'quest-system'
+QuestSystem.requires = ['activity-monitor']

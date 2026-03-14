@@ -5,7 +5,7 @@ import { getBankAPI as _getBankAPI } from '../helpers/extension-api'
 import { ActivityEvent } from '../types/shared-types'
 import {
   ActivityContext, LOG_BOT_DEBUG, LOG_ACTIVITY_EVENTS,
-  FORBIDDEN_ITEM_IDS, FAILED_LOOKUP_COOLDOWN,
+  FAILED_LOOKUP_COOLDOWN,
   markPlayerActive,
 } from './activity-context'
 import {
@@ -64,7 +64,7 @@ export const processEvent = (ctx: ActivityContext, bot: any, event: ActivityEven
 
     case 'ITEM_PICKUP':
     case 'ITEM_DROP':
-      if (typeof event.itemId === 'number' && FORBIDDEN_ITEM_IDS.has(event.itemId)) {
+      if (typeof event.itemId === 'number' && ctx.forbiddenItemIds.has(event.itemId)) {
         const blockheadId = event.blockheadId
         const key = typeof blockheadId === 'number' ? `${blockheadId}:${event.itemId}` : null
         if (key) {
@@ -90,7 +90,7 @@ export const processEvent = (ctx: ActivityContext, bot: any, event: ActivityEven
             }
           }
         }
-        for (const itemId of FORBIDDEN_ITEM_IDS) {
+        for (const itemId of ctx.forbiddenItemIds) {
           const count = snapshotCounts.get(itemId) ?? 0
           const stateKey = `${event.blockheadId}:${itemId}`
           const prev = ctx.forbiddenCounts.get(stateKey) ?? 0

@@ -16,9 +16,6 @@ import org.slf4j.LoggerFactory;
 import java.io.ByteArrayOutputStream;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.text.Normalizer;
 import java.util.Date;
 import java.util.HexFormat;
@@ -33,8 +30,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ChatCommandHandler {
   private static final Logger logger = LoggerFactory.getLogger(ChatCommandHandler.class);
-  private final Path COMMAND_EVENT_FILE;
-
   // Player name -> client peer address mapping (for private messages)
   private final Map<String, Long> playerNameToClientId = new ConcurrentHashMap<>();
   private final Map<String, Long> playerNameToClientIdLower = new ConcurrentHashMap<>();
@@ -46,8 +41,7 @@ public class ChatCommandHandler {
   private volatile byte chatPacketId = ChatHistory.ID;
   private volatile boolean chatPacketUsesMessagesArray = true;
 
-  public ChatCommandHandler(String commandEventsFile) {
-    this.COMMAND_EVENT_FILE = Path.of(commandEventsFile);
+  public ChatCommandHandler() {
   }
 
   public record ResolvedTarget(long clientId, String matchType) {}
@@ -323,8 +317,12 @@ public class ChatCommandHandler {
   private static boolean isLikelyPlist(byte[] data) {
     if (data.length < 4) return false;
     if (BHHelper.isBinaryPropertyList(data)) return true;
-    // XML plist starts with '<' (e.g., "<?xml" or "<plist")
-    return data[0] == '<';
+    // XML plist starts with "<?xml" or "<plist" — require at least 5 bytes to avoid
+    // passing arbitrary binary packets starting with '<' to the SAX parser (causes
+    // spurious [Fatal Error] stderr output before the catch block can suppress it)
+    if (data.length >= 5 && data[0] == '<' && data[1] == '?' && data[2] == 'x' && data[3] == 'm' && data[4] == 'l') return true;
+    if (data.length >= 6 && data[0] == '<' && data[1] == 'p' && data[2] == 'l' && data[3] == 'i' && data[4] == 's' && data[5] == 't') return true;
+    return false;
   }
 
   private static String normalizeAliasKey(String alias) {
@@ -333,12 +331,6 @@ public class ChatCommandHandler {
   }
 
   private void writeCommandEvent(String playerName, String message) {
-    try {
-      String safeMessage = message.replace("\"", "\\\"");
-      String line = STR."{\"player\":\"\{playerName}\",\"message\":\"\{safeMessage}\"}\n";
-      Files.writeString(COMMAND_EVENT_FILE, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-    } catch (Exception e) {
-      logger.warn("Failed to write command event for {}", playerName, e);
-    }
+    EventLogger.getInstance().logCommand(playerName, message);
   }
 }

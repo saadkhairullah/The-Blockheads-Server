@@ -2,7 +2,18 @@ import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { watch } from 'fs'
 import { appendFile } from 'fs/promises'
-import { config } from './config'
+import type { AppConfig } from './config'
+
+// Set once by mac.ts before the bot starts — lets Api use injected config
+// without changing its constructor (which @bhmb/bot controls until Phase 2)
+let _apiConfig: AppConfig | null = null
+export function initApi(cfg: AppConfig): void {
+  _apiConfig = cfg
+}
+function apiConfig(): AppConfig {
+  if (!_apiConfig) throw new Error('[linux-api] initApi(config) must be called before creating Api instances')
+  return _apiConfig
+}
 
 function writeToPipe(pipePath: string, message: string): void {
   appendFile(pipePath, message + '\n').catch(err => {
@@ -43,8 +54,8 @@ export class Api {
   constructor(public info: WorldInfo) {
     this.name = info.name
     this.id = info.id
-    this.savePath = config.paths.worldSave
-    this.inputPipe = config.paths.inputPipe
+    this.savePath = apiConfig().paths.worldSave
+    this.inputPipe = apiConfig().paths.inputPipe
   }
   
   async send(message: string): Promise<void> {
@@ -87,7 +98,7 @@ export class Api {
   
   async getLogs() {
     try {
-      const logContent = await readFile(config.paths.serverLog, 'utf8')
+      const logContent = await readFile(apiConfig().paths.serverLog, 'utf8')
       const lines = logContent.split('\n').slice(-100)
       
       return lines.filter(line => line.trim()).map((line) => ({
@@ -180,8 +191,8 @@ export async function getWorlds(): Promise<WorldInfo[]> {
   return []
 }
 
-export function watchChat() {
-  const logPath = config.paths.serverLog
+export function watchChat(cfg: AppConfig) {
+  const logPath = cfg.paths.serverLog
   let lastPosition = 0
   
   console.log('[watchChat] Starting to watch:', logPath)
@@ -290,55 +301,20 @@ export function watchChat() {
   console.log('Watching chat log at:', logPath)
 }
 
-export function watchCommandEvents() {
-  const commandPath = config.paths.commandEvents
-  let lastPosition = 0
-
-  console.log('[watchCommands] Starting to watch:', commandPath)
-
-  readFile(commandPath, 'utf8').then(content => {
-    lastPosition = content.length
-    console.log('[watchCommands] Initial file size:', lastPosition)
-  }).catch(() => {
-    console.log('[watchCommands] Command file not found, will start from beginning')
-    lastPosition = 0
-  })
-
-  watch(commandPath, async (eventType) => {
-    if (eventType !== 'change') return
-    try {
-      const content = await readFile(commandPath, 'utf8')
-      const newContent = content.slice(lastPosition)
-      lastPosition = content.length
-      if (!newContent.trim()) return
-
-      const lines = newContent.split('\n')
-      for (const line of lines) {
-        if (!line.trim()) continue
-        try {
-          const evt = JSON.parse(line)
-          const playerName = (evt.player ?? '').toString().trim()
-          const message = (evt.message ?? '').toString().trim()
-          if (!playerName || !message) continue
-
-          const msg: ChatMessage = {
-            player: { name: playerName, id: playerName },
-            message: message,
-            timestamp: new Date()
-          }
-          if (messageCallback) {
-            messageCallback(msg)
-          }
-        } catch {
-          // Ignore malformed lines
-        }
-      }
-    } catch (err) {
-      console.error('[watchCommands] Error:', err)
+export function watchCommandEvents(_cfg: AppConfig) {
+  const { eventDispatcher } = require('./event-dispatcher')
+  eventDispatcher.subscribe('command', (event: any) => {
+    const playerName = (event.player ?? '').toString().trim()
+    const message = (event.command ?? '').toString().trim()
+    if (!playerName || !message) return
+    const msg: ChatMessage = {
+      player: { name: playerName, id: playerName },
+      message,
+      timestamp: new Date()
     }
+    if (messageCallback) messageCallback(msg)
   })
-
-  console.log('Watching command events at:', commandPath)
+  console.log('[watchCommands] Subscribed to command events via UDS socket')
 }
 
 export function setMessageCallback(callback: (msg: ChatMessage) => void) {

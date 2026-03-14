@@ -1,13 +1,13 @@
-import { QuestContext, LOG_QUEST_CACHE, LOG_BOT_DEBUG, SHUTDOWN_FLAG_PATH } from './quest-context'
+import { QuestContext, LOG_QUEST_CACHE, LOG_BOT_DEBUG } from './quest-context'
 import { sendPrivateMessage } from '../../private-message'
 import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
 import { getCurrentQuest, getPlayerProgress, getPendingRewards, clearPendingRewards, hasPendingRewards, addToPendingRewards, applySeasonResetForPlayer, applySeasonReset } from './quest-persistence'
 import { formatReward, executeGiveCommand, isPlayerCurrentlyAtLocation } from './quest-completion'
 
-const isShuttingDown = (): boolean => {
+const isShuttingDown = (ctx: QuestContext): boolean => {
   try {
     const { existsSync } = require('fs')
-    return existsSync(SHUTDOWN_FLAG_PATH)
+    return existsSync(ctx.shutdownFlagPath)
   } catch {
     return false
   }
@@ -68,7 +68,7 @@ export const registerQuestCommands = (ctx: QuestContext) => {
   ctx.world.onMessage.sub(async ({ player, message }) => {
     if (message !== '/claim') return
 
-    if (isShuttingDown()) {
+    if (isShuttingDown(ctx)) {
       sendPrivateMessage(player.name, `${player.name}: Claims temporarily disabled - bot restarting soon.`)
       return
     }

@@ -11,11 +11,12 @@
     "worldManager": "./tools/world_manager.py",
     "inventoryReader": "./tools/inventory_reader.py",
     "wildLocations": "./tools/wild_locations.py",
-    "privateMessages": "./data/private_messages.jsonl",
+    "proxyCommandSock": "/tmp/bh-commands.sock",
     "commandEvents": "./data/command_events.jsonl",
     "serverLog": "./data/blockheads.log",
     "inputPipe": "./data/blockheads_input",
-    "dataDir": "./data"
+    "dataDir": "./data",
+    "questData": "./config/quest-data.json"
   },
   "game": {
     "spawn": { "x": 0, "y": 0 },

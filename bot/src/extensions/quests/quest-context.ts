@@ -1,7 +1,7 @@
 import { join } from 'path'
-import { config } from '../../config'
+import { readFileSync } from 'fs'
+import type { AppConfig } from '../../config'
 import { Quest, QuestRequirement, QuestReward } from './quest-types'
-import { QUESTS } from './quest-data'
 
 // ============================================================================
 // Types
@@ -32,10 +32,6 @@ export interface PendingReward {
 // Constants
 // ============================================================================
 
-export const QUEST_DATA_PATH = join(config.paths.dataDir, 'quest-progress.json')
-export const PENDING_REWARDS_PATH = join(config.paths.dataDir, 'pending-rewards.json')
-export const SHUTDOWN_FLAG_PATH = join(config.paths.dataDir, '.bot-shutdown-pending')
-export const BACKUP_DIR = join(config.paths.dataDir, 'backups')
 
 // ============================================================================
 // Quest versioning — bump CURRENT_QUEST_VERSION when adding new quests so
@@ -45,10 +41,6 @@ export const CURRENT_QUEST_VERSION = 2
 export const LAST_OLD_QUEST_ID = '26'    // Last quest in the main chain
 export const FIRST_NEW_QUEST_ID = '8.1'  // First new quest in the expanded chain
 
-// Arena where kill quests count. Configure in config.json game.arena.
-export const ARENA_CENTER_X = config.game.arena.x
-export const ARENA_CENTER_Y = config.game.arena.y
-export const ARENA_RADIUS    = config.game.arena.radius
 
 export const INVENTORY_POLL_INTERVAL = 15000
 export const MAX_INVENTORY_CACHE = 500
@@ -68,6 +60,15 @@ export const FAILED_LOOKUP_COOLDOWN = 10 * 1000
 // ============================================================================
 
 export interface QuestContext {
+  // Config-derived paths and values (computed at factory time)
+  questDataPath: string
+  pendingRewardsPath: string
+  shutdownFlagPath: string
+  backupDir: string
+  arenaCenterX: number
+  arenaCenterY: number
+  arenaRadius: number
+
   // Bot framework
   bot: { send: (msg: string) => void }
   world: {
@@ -99,13 +100,22 @@ export interface QuestContext {
   isPlayerCurrentlyAtLocation: (playerName: string, req: QuestRequirement) => boolean
 }
 
-export function createQuestContext(ex: any): QuestContext {
+export function createQuestContext(ex: any, cfg: AppConfig): QuestContext {
+  const QUESTS: Quest[] = JSON.parse(readFileSync(cfg.paths.questData, 'utf8'))
   const questById = new Map<string, Quest>()
   for (const q of QUESTS) {
     questById.set(q.id, q)
   }
 
   return {
+    questDataPath: join(cfg.paths.dataDir, 'quest-progress.json'),
+    pendingRewardsPath: join(cfg.paths.dataDir, 'pending-rewards.json'),
+    shutdownFlagPath: join(cfg.paths.dataDir, '.bot-shutdown-pending'),
+    backupDir: join(cfg.paths.dataDir, 'backups'),
+    arenaCenterX: cfg.game.arena.x,
+    arenaCenterY: cfg.game.arena.y,
+    arenaRadius: cfg.game.arena.radius,
+
     bot: ex.bot,
     world: ex.world,
 

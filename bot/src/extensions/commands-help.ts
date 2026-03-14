@@ -30,6 +30,9 @@ MessageBot.registerExtension('commands-help', (ex) => {
       name: 'Teleportation',
       commands: [
         { cmd: '/spawn', desc: 'Teleport back to spawn' },
+        { cmd: '/sethome', desc: 'Save your current location as your home' },
+        { cmd: '/home', desc: 'Teleport to your saved home' },
+        { cmd: '/delhome', desc: 'Delete your saved home' },
         { cmd: '/wild', desc: 'Teleport to random wilderness (50 tokens, 15min cooldown)' },
         { cmd: '/tpa <player>', desc: 'Request to teleport to a player (costs tokens)' },
         { cmd: '/tpaccept <player>', desc: 'Accept a teleport request' },

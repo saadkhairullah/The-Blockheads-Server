@@ -1,8 +1,9 @@
 import { Storage as AStorage } from '@bhmb/bot'
 import { join } from 'path'
 import { writeFile, readFileSync, existsSync } from 'fs'
+import { config } from './config'
 
-const jsonPath = join(__dirname, '..', 'config', 'localStorage.json')
+const jsonPath = join(config.paths.dataDir, 'localStorage.json')
 let fileStorage = new Map<string, string>()
 let lastSave = Date.now()
 let lastChange = 0

@@ -8,14 +8,23 @@
  *   python3 tools/uds_daemon.py <save_path>
  */
 
-import { getWMClient } from './wm-client'
-import { config } from './config'
+import { WMClient } from './wm-client'
+import type { AppConfig } from './config'
 
 // In-memory cache: skip LMDB lookup when we already know the mapping
 const playerToBlockheads = new Map<string, Set<number>>()
 const blockheadToPlayer = new Map<number, string>()
 
-const wm = () => getWMClient()
+let _wmClient: WMClient | null = null
+
+export function setWMClient(wm: WMClient): void {
+  _wmClient = wm
+}
+
+const wm = (): WMClient => {
+  if (!_wmClient) throw new Error('[blockhead-service] setWMClient() must be called before using service functions')
+  return _wmClient
+}
 
 /**
  * Get all blockhead IDs for a player UUID.
@@ -170,13 +179,13 @@ export const getBlockheadPosition = async (
  * Find a random wild teleport location (tree not near any protection sign).
  * Parameters are read from config.json — edit economy/game.spawn there to change them.
  */
-export const findWildLocation = async (): Promise<{ success: boolean, x?: number, y?: number, error?: string }> => {
+export const findWildLocation = async (cfg: AppConfig): Promise<{ success: boolean, x?: number, y?: number, error?: string }> => {
   try {
     const resp = await wm().send('find_wild_location', {
-      minY: config.economy.wildMinY,
-      maxY: config.economy.wildMaxY,
-      spawnX: config.game.spawn.x,
-      minSpawnDistance: config.economy.wildMinSpawnDistance,
+      minY: cfg.economy.wildMinY,
+      maxY: cfg.economy.wildMaxY,
+      spawnX: cfg.game.spawn.x,
+      minSpawnDistance: cfg.economy.wildMinSpawnDistance,
     })
     return {
       success: resp.success === true,

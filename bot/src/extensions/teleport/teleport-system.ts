@@ -1,16 +1,18 @@
 import { MessageBot } from '@bhmb/bot'
 import { join } from 'path'
-import { config } from '../../config'
+import type { AppConfig } from '../../config'
+import type { BotContext, ExtensionFactory } from '../../bot-context'
 import { enqueueShared } from '../../shared-queue'
 import * as BlockheadService from '../../blockhead-service'
 import { sendPrivateMessage } from '../../private-message'
 import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
 import { getBankAPI as _getBankAPI, getActivityMonitorAPI as _getActivityMonitorAPI } from '../helpers/extension-api'
 
-MessageBot.registerExtension('teleport-system', (ex) => {
+export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): string => {
+  MessageBot.registerExtension('teleport-system', (ex) => {
   console.log('Teleport System extension loaded!')
 
-  const shutdownFlagPath = join(config.paths.dataDir, '.bot-shutdown-pending')
+  const shutdownFlagPath = join(cfg.paths.dataDir, '.bot-shutdown-pending')
 
   const getBankAPI = () => _getBankAPI(ex.bot)
   const getActivityMonitorAPI = () => _getActivityMonitorAPI(ex.bot)
@@ -25,10 +27,36 @@ MessageBot.registerExtension('teleport-system', (ex) => {
   }
 
   // -------------------------------------------------------------------------
+  // Homes storage
+  // -------------------------------------------------------------------------
+  const homesPath = join(cfg.paths.dataDir, 'player-homes.json')
+  const homeLocations = new Map<string, { x: number; y: number }>()
+
+  try {
+    const { readFileSync } = require('fs')
+    const raw = readFileSync(homesPath, 'utf8')
+    for (const [name, coords] of Object.entries(JSON.parse(raw))) {
+      homeLocations.set(name, coords as { x: number; y: number })
+    }
+    console.log(`[/home] Loaded ${homeLocations.size} homes`)
+  } catch {
+    // No homes file yet — start empty
+  }
+
+  const saveHomes = () => {
+    const { writeFile } = require('fs/promises')
+    const obj: Record<string, { x: number; y: number }> = {}
+    for (const [name, coords] of homeLocations) obj[name] = coords
+    writeFile(homesPath, JSON.stringify(obj, null, 2)).catch((err: Error) => {
+      console.error('[/home] Failed to save homes:', err.message)
+    })
+  }
+
+  // -------------------------------------------------------------------------
   // Blockhead selection system
   // -------------------------------------------------------------------------
   interface PendingSelection {
-    command: 'wild' | 'tp' | 'tpa' | 'spawn'
+    command: 'wild' | 'tp' | 'tpa' | 'spawn' | 'home' | 'sethome'
     blockheads: { id: number, name: string }[]
     playerName: string
     playerUuid: string
@@ -45,7 +73,7 @@ MessageBot.registerExtension('teleport-system', (ex) => {
   const getBlockheadsOrPrompt = async (
     playerName: string,
     playerUuid: string,
-    command: 'wild' | 'tp' | 'tpa' | 'spawn',
+    command: 'wild' | 'tp' | 'tpa' | 'spawn' | 'home' | 'sethome',
     extraData: Partial<PendingSelection> = {}
   ): Promise<{ blockheadId: number } | 'prompted' | null> => {
     const blockheads = await BlockheadService.getBlockheadNames(playerUuid)
@@ -104,11 +132,11 @@ MessageBot.registerExtension('teleport-system', (ex) => {
   // /wild command - teleport to random wilderness location
   // -------------------------------------------------------------------------
   const wildCooldowns = new Map<string, number>() // playerName -> timestamp
-  const WILD_COOLDOWN_MS = config.economy.wildCooldownMs
-  const WILD_COST = config.economy.wildCost
+  const WILD_COOLDOWN_MS = cfg.economy.wildCooldownMs
+  const WILD_COST = cfg.economy.wildCost
 
   const findWildLocation = (): Promise<{ success: boolean, x?: number, y?: number, error?: string }> => {
-    return BlockheadService.findWildLocation()
+    return BlockheadService.findWildLocation(cfg)
   }
 
   const executeWild = async (playerName: string, blockheadId: number, playerUuid: string, wildResult: { x: number, y: number }) => {
@@ -205,9 +233,9 @@ MessageBot.registerExtension('teleport-system', (ex) => {
   }
   const tpaRequests = new Map<string, TpaRequest>() // targetPlayer -> request
   const tpaCooldowns = new Map<string, number>() // playerName -> timestamp
-  const TPA_COOLDOWN_MS = config.economy.tpaCooldownMs
-  const TPA_COST = config.economy.tpaCost
-  const TPA_EXPIRE_MS = config.economy.tpaExpireMs
+  const TPA_COOLDOWN_MS = cfg.economy.tpaCooldownMs
+  const TPA_COST = cfg.economy.tpaCost
+  const TPA_EXPIRE_MS = cfg.economy.tpaExpireMs
 
   // Clean up expired TPA requests and pending selections
   const cleanupTimer = setInterval(() => {
@@ -450,8 +478,8 @@ MessageBot.registerExtension('teleport-system', (ex) => {
   // -------------------------------------------------------------------------
   // /spawn command - teleport to spawn
   // -------------------------------------------------------------------------
-  const SPAWN_X = config.game.spawn.x
-  const SPAWN_Y = config.game.spawn.y
+  const SPAWN_X = cfg.game.spawn.x
+  const SPAWN_Y = cfg.game.spawn.y
 
   ex.world.onMessage.sub(async ({ player, message }) => {
     if (message !== '/spawn') return
@@ -483,6 +511,91 @@ MessageBot.registerExtension('teleport-system', (ex) => {
     if (result === 'prompted') return
 
     await executeTeleport(playerName, result.blockheadId, SPAWN_X, SPAWN_Y, playerUuid, '/spawn')
+  })
+
+  // -------------------------------------------------------------------------
+  // /sethome command - save current location as home
+  // -------------------------------------------------------------------------
+  ex.world.onMessage.sub(async ({ player, message }) => {
+    if (message !== '/sethome') return
+
+    if (isShuttingDown()) {
+      sendPrivateMessage(player.name, `${player.name}: /sethome temporarily disabled - bot restarting soon.`)
+      return
+    }
+
+    const playerName = player.name
+    const activityAPI = getActivityMonitorAPI()
+
+    const playerUuid = activityAPI?.getPlayerUuid?.(playerName)
+    if (!playerUuid) {
+      sendPrivateMessage(playerName, `${playerName}: Could not find your UUID. Please rejoin the server.`)
+      return
+    }
+
+    const result = await getBlockheadsOrPrompt(playerName, playerUuid, 'sethome')
+    if (result === null) return
+    if (result === 'prompted') return
+
+    const pos = await BlockheadService.getBlockheadPosition(result.blockheadId, playerUuid)
+    if (!pos.ok || pos.x === undefined || pos.y === undefined) {
+      sendPrivateMessage(playerName, `${playerName}: Could not read your current position. Try moving first.`)
+      return
+    }
+
+    homeLocations.set(playerName, { x: pos.x, y: pos.y })
+    saveHomes()
+    sendPrivateMessage(playerName, `${playerName}: Home set at (${pos.x}, ${pos.y}).`)
+    console.log(`[/sethome] ${playerName} set home at (${pos.x}, ${pos.y})`)
+  })
+
+  // -------------------------------------------------------------------------
+  // /home and /delhome commands
+  // -------------------------------------------------------------------------
+  ex.world.onMessage.sub(async ({ player, message }) => {
+    if (message !== '/home' && message !== '/delhome') return
+
+    const playerName = player.name
+
+    if (message === '/delhome') {
+      if (!homeLocations.has(playerName)) {
+        sendPrivateMessage(playerName, `${playerName}: You don't have a home set.`)
+        return
+      }
+      homeLocations.delete(playerName)
+      saveHomes()
+      sendPrivateMessage(playerName, `${playerName}: Home deleted.`)
+      console.log(`[/delhome] ${playerName} deleted their home`)
+      return
+    }
+
+    if (isShuttingDown()) {
+      sendPrivateMessage(playerName, `${playerName}: /home temporarily disabled - bot restarting soon.`)
+      return
+    }
+
+    const home = homeLocations.get(playerName)
+
+    if (!home) {
+      sendPrivateMessage(playerName, `${playerName}: You don't have a home set. Use /sethome to set one.`)
+      return
+    }
+
+    const activityAPI = getActivityMonitorAPI()
+    const playerUuid = activityAPI?.getPlayerUuid?.(playerName)
+    if (!playerUuid) {
+      sendPrivateMessage(playerName, `${playerName}: Could not find your UUID. Please rejoin the server.`)
+      return
+    }
+
+    const result = await getBlockheadsOrPrompt(playerName, playerUuid, 'home', {
+      tpCoords: { x: home.x, y: home.y },
+    })
+
+    if (result === null) return
+    if (result === 'prompted') return
+
+    await executeTeleport(playerName, result.blockheadId, home.x, home.y, playerUuid, '/home')
   })
 
   // -------------------------------------------------------------------------
@@ -580,6 +693,20 @@ MessageBot.registerExtension('teleport-system', (ex) => {
       } else if (pending.command === 'tp' && pending.tpCoords) {
         await executeTeleport(playerName, selected.id, pending.tpCoords.x, pending.tpCoords.y, pending.playerUuid, '/tp')
 
+      } else if (pending.command === 'home' && pending.tpCoords) {
+        await executeTeleport(playerName, selected.id, pending.tpCoords.x, pending.tpCoords.y, pending.playerUuid, '/home')
+
+      } else if (pending.command === 'sethome') {
+        const pos = await BlockheadService.getBlockheadPosition(selected.id, pending.playerUuid)
+        if (!pos.ok || pos.x === undefined || pos.y === undefined) {
+          sendPrivateMessage(playerName, `${playerName}: Could not read your current position. Try moving first.`)
+          return
+        }
+        homeLocations.set(playerName, { x: pos.x, y: pos.y })
+        saveHomes()
+        sendPrivateMessage(playerName, `${playerName}: Home set at (${pos.x}, ${pos.y}).`)
+        console.log(`[/sethome] ${playerName} set home at (${pos.x}, ${pos.y}) via blockhead ${selected.name}`)
+
       } else if (pending.command === 'tpa' && pending.tpaRequest) {
         const tpaTargetName = (pending as any).tpaTargetName as string
         if (!tpaTargetName) {
@@ -609,4 +736,8 @@ MessageBot.registerExtension('teleport-system', (ex) => {
     clearInterval(cleanupTimer)
     console.log('Teleport System stopped')
   }
-})
+  })
+  return 'teleport-system'
+}
+TeleportSystem.extensionName = 'teleport-system'
+TeleportSystem.requires = ['virtual-bank', 'activity-monitor']

@@ -1,4 +1,4 @@
-import { QuestContext, ARENA_CENTER_X, ARENA_CENTER_Y, ARENA_RADIUS, LOG_BOT_DEBUG, ACTIVE_BLOCKHEAD_WINDOW_MS } from './quest-context'
+import { QuestContext, LOG_BOT_DEBUG, ACTIVE_BLOCKHEAD_WINDOW_MS } from './quest-context'
 import { getPlayerProgress, getCurrentQuest } from './quest-persistence'
 import { sendPrivateMessage } from '../../private-message'
 import { playerManager } from '../helpers/blockhead-mapping'
@@ -6,7 +6,7 @@ import { playerManager } from '../helpers/blockhead-mapping'
 /**
  * Check if a player's most recent known position is inside the arena.
  */
-const isInArena = (_ctx: QuestContext, playerName: string): boolean => {
+const isInArena = (ctx: QuestContext, playerName: string): boolean => {
   const p = playerManager.get(playerName)
   if (!p || p.blockheads.size === 0) return false
 
@@ -15,8 +15,8 @@ const isInArena = (_ctx: QuestContext, playerName: string): boolean => {
     if (!coords) continue
     if (Date.now() - coords.time > ACTIVE_BLOCKHEAD_WINDOW_MS) continue
 
-    const dist = Math.sqrt((coords.x - ARENA_CENTER_X) ** 2 + (coords.y - ARENA_CENTER_Y) ** 2)
-    if (dist <= ARENA_RADIUS) return true
+    const dist = Math.sqrt((coords.x - ctx.arenaCenterX) ** 2 + (coords.y - ctx.arenaCenterY) ** 2)
+    if (dist <= ctx.arenaRadius) return true
   }
   return false
 }

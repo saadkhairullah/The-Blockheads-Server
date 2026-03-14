@@ -8,4 +8,11 @@ dependencies {
 
 application {
     mainClass = "com.juanmuscaria.blockheads.BHInterceptor"
+    applicationDefaultJvmArgs = [
+        '--enable-preview',
+        '--enable-native-access=ALL-UNNAMED',
+        '--add-opens=java.base/java.nio=ALL-UNNAMED,',
+        '-Djansi.mode=force',
+        '-Dpicocli.ansi=true'
+    ]
 }

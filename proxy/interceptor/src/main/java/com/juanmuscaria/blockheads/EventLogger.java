@@ -272,6 +272,17 @@ public class EventLogger {
     }
 
     /**
+     * Log a player command (e.g. /quest, /balance) and broadcast via UDS to the bot.
+     */
+    public void logCommand(String playerName, String command) {
+        String json = String.format(
+            "{\"type\":\"command\",\"player\":\"%s\",\"command\":\"%s\",\"time\":%d}",
+            escapeJson(playerName), escapeJson(command), System.currentTimeMillis()
+        );
+        eventQueue.offer(json);
+    }
+
+    /**
      * Get current position of a player (for /coords command).
      */
     public int[] getPlayerPosition(int blockheadId) {

@@ -56,10 +56,8 @@ public class BHInterceptor implements Runnable {
   private boolean forwardData;
   @Option(names = {"--max-clients", "-M"}, description = "Maximum number of concurrent clients", defaultValue = "32")
   private int maxClients;
-  @Option(names = {"--private-messages-file"}, description = "Path to private messages JSONL file", defaultValue = "${BH_PRIVATE_MESSAGES_FILE:-private_messages.jsonl}")
-  private String privateMessagesFile;
-  @Option(names = {"--command-events-file"}, description = "Path to command events JSONL file", defaultValue = "${BH_COMMAND_EVENTS_FILE:-command_events.jsonl}")
-  private String commandEventsFile;
+  @Option(names = {"--command-socket"}, description = "Path to UDS command socket (bot sends commands here)", defaultValue = "${BH_COMMAND_SOCKET:-/tmp/bh-commands.sock}")
+  private String commandSocket;
 
   // Maps client peer address to their server connection info
   private final Map<Long, ClientConnection> clientConnections = new ConcurrentHashMap<>();
@@ -67,8 +65,8 @@ public class BHInterceptor implements Runnable {
   // Client ID -> IP address mapping (for logging)
   private final Map<Long, String> clientIdToIpAddress = new ConcurrentHashMap<>();
 
-  // Private message file watcher
-  private PrivateMessageWatcher privateMessageWatcher;
+  // Command socket (bot → proxy)
+  private UDSCommandServer commandServer;
 
   // UDS event server for pushing events to bot
   private UDSEventServer udsServer;
@@ -112,7 +110,7 @@ public class BHInterceptor implements Runnable {
     // We don't need any fancy memory sharing here, create a confined allocator
     try (Arena allocator = Arena.ofConfined()) {
       MemorySegment proxyServer = null;
-      var chatHandler = new ChatCommandHandler(commandEventsFile);
+      var chatHandler = new ChatCommandHandler();
 
       try {
         var proxyAddress = ENetAddress.allocate(allocator);
@@ -139,9 +137,14 @@ public class BHInterceptor implements Runnable {
 
         var event = ENetEvent.allocate(allocator);
 
-        // Start private message file watcher
-        privateMessageWatcher = new PrivateMessageWatcher(privateMessagesFile);
-        privateMessageWatcher.start();
+        // Start command socket server (receives commands from bot)
+        try {
+          commandServer = new UDSCommandServer(commandSocket);
+          commandServer.start();
+          logger.info("UDS command server started");
+        } catch (IOException e) {
+          logger.warn("Failed to start command socket server, private messages will not work", e);
+        }
 
         // Start UDS event server
         try {
@@ -277,9 +280,9 @@ public class BHInterceptor implements Runnable {
             }
           }
 
-          // Drain private messages and send to targeted clients
-          if (privateMessageWatcher != null) {
-            for (var pmsg : privateMessageWatcher.drainMessages()) {
+          // Drain commands and dispatch (currently: private messages)
+          if (commandServer != null) {
+            for (var pmsg : commandServer.drainMessages()) {
               String target = pmsg.target();
               var resolved = chatHandler.resolveTargetClientId(target);
               if (resolved != null) {
@@ -298,9 +301,9 @@ public class BHInterceptor implements Runnable {
         }
         Thread.currentThread().interrupt(); // Restore interrupt status
       } finally {
-        // Stop private message watcher
-        if (privateMessageWatcher != null) {
-          privateMessageWatcher.stop();
+        // Stop command socket server
+        if (commandServer != null) {
+          commandServer.stop();
         }
         // Stop UDS event server
         if (udsServer != null) {

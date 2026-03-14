@@ -1,11 +1,13 @@
 import { MessageBot } from '@bhmb/bot'
-import { config } from '../config'
+import type { AppConfig } from '../config'
+import type { BotContext, ExtensionFactory } from '../bot-context'
 import { enqueueShared } from '../shared-queue'
 import { sendPrivateMessage } from '../private-message'
 import { isAdmin as isAdminHelper } from './helpers/isAdmin'
 import { normalizePlayerName } from './helpers/blockhead-mapping'
+import { readFileSync } from 'fs'
 import { getQuestAPI as _getQuestAPI } from './helpers/extension-api'
-import { QUESTS } from './quests/quest-data'
+import type { Quest } from './quests/quest-types'
 
 interface BankAccount {
   balance: number
@@ -22,7 +24,9 @@ interface Transaction {
   timestamp: number
 }
 
-MessageBot.registerExtension('virtual-bank', (ex) => {
+export const VirtualBank: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): string => {
+  const QUESTS: Quest[] = JSON.parse(readFileSync(cfg.paths.questData, 'utf8'))
+  MessageBot.registerExtension('virtual-bank', (ex) => {
   console.log('Virtual Bank System loaded!')
   
   // Helper functions
@@ -324,7 +328,7 @@ MessageBot.registerExtension('virtual-bank', (ex) => {
         return
       }
 
-      const dailyAmount = config.economy.dailyReward
+      const dailyAmount = cfg.economy.dailyReward
       const account = getAccount(player.name)
       account.balance += dailyAmount
       saveAccount(player.name, account)
@@ -395,4 +399,8 @@ MessageBot.registerExtension('virtual-bank', (ex) => {
   ex.remove = () => {
     console.log('Virtual Bank System unloaded')
   }
-})
+  })
+  return 'virtual-bank'
+}
+VirtualBank.extensionName = 'virtual-bank'
+VirtualBank.requires = []
