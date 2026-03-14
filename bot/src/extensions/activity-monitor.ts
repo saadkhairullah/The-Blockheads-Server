@@ -352,6 +352,16 @@ export const ActivityMonitor: ExtensionFactory = (_bot: BotContext, cfg: AppConf
     getPlayerUuid,
   }
 
+  const { registerCategory } = require('./helpers/command-registry')
+  registerCategory('activity', {
+    name: 'Activity',
+    player: [
+      { cmd: '/coords', desc: 'View your current coordinates' },
+      { cmd: '/tracked', desc: 'See which blockhead is being tracked' },
+      { cmd: '/track <n>', desc: 'Choose which blockhead to track' },
+    ],
+  })
+
   ex.remove = () => {
     console.log('Activity Monitor stopped')
   }

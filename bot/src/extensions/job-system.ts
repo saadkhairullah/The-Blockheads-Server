@@ -397,6 +397,22 @@ export const JobSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): s
     startTimers()
   })
 
+  const { registerCategory } = require('./helpers/command-registry')
+  registerCategory('jobs', {
+    name: 'Jobs',
+    player: [
+      { cmd: '/jobs', desc: 'View available jobs and requirements' },
+      { cmd: '/apply <job> <discord>', desc: 'Apply for a job' },
+      { cmd: '/rep <message>', desc: 'Submit your weekly work report' },
+    ],
+    admin: [
+      { cmd: '/hire <player> <job>', desc: 'Hire a player for a job' },
+      { cmd: '/reject <player> [reason]', desc: 'Reject a job application' },
+      { cmd: '/fire <player> [reason]', desc: 'Fire an employee' },
+      { cmd: '/promote <player> <pay>', desc: 'Change employee daily pay' },
+    ],
+  })
+
   ex.remove = () => {
     if (reportTimer) clearInterval(reportTimer)
     if (payTimer) clearInterval(payTimer)

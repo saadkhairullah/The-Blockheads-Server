@@ -379,6 +379,16 @@ export const ShopSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): 
     }
   })
 
+  const { registerCategory } = require('./helpers/command-registry')
+  registerCategory('shop', {
+    name: 'Shop',
+    player: [
+      { cmd: '/shop', desc: 'View available items for purchase' },
+      { cmd: '/buy <item>', desc: 'Purchase an item from the shop' },
+      { cmd: '/unknown', desc: 'Buy a random mystery item (50 tokens)' },
+    ],
+  })
+
   ex.remove = () => {
     console.log('Shop System stopped')
   }

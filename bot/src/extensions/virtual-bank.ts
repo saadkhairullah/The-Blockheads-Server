@@ -396,6 +396,24 @@ export const VirtualBank: ExtensionFactory = (_bot: BotContext, cfg: AppConfig):
     }
   }
   
+  const { registerCategory } = require('./helpers/command-registry')
+  registerCategory('bank', {
+    name: 'Bank',
+    player: [
+      { cmd: '/balance', alias: '/bal', desc: 'Check your token balance' },
+      { cmd: '/pay <player> <amount>', desc: 'Send tokens to another player' },
+      { cmd: '/cf <amount>', desc: 'Flip a coin for double or nothing' },
+      { cmd: '/transactions', alias: '/history', desc: 'View recent transactions' },
+      { cmd: '/baltop', alias: '/leaderboard', desc: 'Top token balances' },
+      { cmd: '/daily', desc: 'Claim your daily token reward' },
+      { cmd: '/bank', desc: 'View all banking commands' },
+    ],
+    admin: [
+      { cmd: '/deposit <player> <amount>', desc: 'Add tokens to a player' },
+      { cmd: '/withdraw <player> <amount>', desc: 'Remove tokens from a player' },
+    ],
+  })
+
   ex.remove = () => {
     console.log('Virtual Bank System unloaded')
   }

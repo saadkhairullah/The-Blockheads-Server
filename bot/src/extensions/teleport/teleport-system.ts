@@ -732,6 +732,24 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
     }
   })
 
+  const { registerCategory } = require('../helpers/command-registry')
+  registerCategory('teleportation', {
+    name: 'Teleportation',
+    player: [
+      { cmd: '/spawn', desc: 'Teleport back to spawn' },
+      { cmd: '/sethome', desc: 'Save your current location as your home' },
+      { cmd: '/home', desc: 'Teleport to your saved home' },
+      { cmd: '/delhome', desc: 'Delete your saved home' },
+      { cmd: '/wild', desc: `Teleport to random wilderness (${cfg.economy.wildCost} tokens, cooldown)` },
+      { cmd: '/tpa <player>', desc: 'Request to teleport to a player' },
+      { cmd: '/tpaccept <player>', desc: 'Accept a teleport request' },
+      { cmd: '/tpdeny <player>', desc: 'Deny a teleport request' },
+    ],
+    admin: [
+      { cmd: '/tp <x> <y>', desc: 'Teleport to specific coordinates' },
+    ],
+  })
+
   ex.remove = () => {
     clearInterval(cleanupTimer)
     console.log('Teleport System stopped')

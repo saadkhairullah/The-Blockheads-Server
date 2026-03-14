@@ -22,4 +22,12 @@ MessageBot.registerExtension('whisper', (ex) => {
     sendPrivateMessage(targetName, `[whisper] ${player.name}: ${text}`)
     sendPrivateMessage(player.name, `[whisper] to ${targetName}: ${text}`)
   })
+
+  const { registerCategory } = require('./helpers/command-registry')
+  registerCategory('social', {
+    name: 'Social',
+    player: [
+      { cmd: '/whisper <player> <msg>', alias: '/w', desc: 'Send a private message to a player' },
+    ],
+  })
 })

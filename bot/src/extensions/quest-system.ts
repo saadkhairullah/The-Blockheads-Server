@@ -207,6 +207,21 @@ export const QuestSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig):
     }
   }
 
+  const { registerCategory } = require('./helpers/command-registry')
+  registerCategory('quests', {
+    name: 'Quests',
+    player: [
+      { cmd: '/quest', alias: '/quests', desc: 'View your current quest and progress' },
+      { cmd: '/claim', desc: 'Claim pending quest rewards' },
+    ],
+    admin: [
+      { cmd: '/questskip', desc: 'Skip a player to their next quest' },
+      { cmd: '/questreset <player>', desc: 'Reset a player\'s quest progress' },
+      { cmd: '/seasonreset', desc: 'Reset all player quest progress for a new season' },
+      { cmd: '/give <player> <itemid> <amount>', desc: 'Give an item to a player' },
+    ],
+  })
+
   ex.remove = () => {
     stopInventoryPolling()
     stopAutoSave()

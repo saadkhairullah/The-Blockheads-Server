@@ -107,14 +107,8 @@ gcc -shared -fPIC -o blockheads_give.so blockheads_give.c -lobjc -ldl -lpthread
 ### 5. Start the server
 
 ```bash
-nohup bash -c 'tail -f /path/to/blockheads_input | \
-  BH_ADMIN_LIST_PATH=/path/to/saves/YOUR_WORLD_UUID/adminlist.txt \
-  LD_PRELOAD=/path/to/blockheads_give.so \
-  ./blockheads_server171 \
-  -o YOUR_WORLD_UUID \
-  -s 67 -m 32 \
-  --owner YOUR_USERNAME \
-  --no-exit 2>&1 | tee /path/to/blockheads.log' &
+nohup bash -c '
+  tail -f /worlds/my-world/data/blockheads_input | LD_PRELOAD=/opt/bhs/blockheads_give.so /path/to/blockheads_server171 -o abc-1234-your-uuid-here -s 67 -m 32 --owner YourUsername --no-exit 2>&1 | tee /worlds/my-world/data/blockheads.log' &
 ```
 
 - `tail -f blockheads_input` — how the bot sends kick/chat commands to the server

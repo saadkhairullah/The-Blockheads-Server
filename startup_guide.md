@@ -203,16 +203,7 @@ cd /opt/bhs/bot && npm run build
 
 ```bash
 nohup bash -c '
-  tail -f /worlds/my-world/data/blockheads_input | \
-  BH_ADMIN_LIST_PATH=/path/to/worldSave/adminlist.txt \
-  LD_PRELOAD=/opt/bhs/blockheads_give.so \
-  /path/to/blockheads_server171 \
-    -o abc-1234-your-uuid-here \
-    -s 67 -m 32 \
-    --owner YourUsername \
-    --no-exit \
-  2>&1 | tee /worlds/my-world/data/blockheads.log
-' &
+  tail -f /worlds/my-world/data/blockheads_input | LD_PRELOAD=/opt/bhs/blockheads_give.so /path/to/blockheads_server171 -o abc-1234-your-uuid-here -s 67 -m 32 --owner YourUsername --no-exit 2>&1 | tee /worlds/my-world/data/blockheads.log' &
 ```
 
 What each piece does:
@@ -220,10 +211,10 @@ What each piece does:
 | Part | Purpose |
 |------|---------|
 | `tail -f .../blockheads_input` | Bot writes kick/chat/give commands here; piped into server stdin |
-| `LD_PRELOAD=.../blockheads_give.so` | Adds `/give-id` to stdin so the bot can give items to players |
+| `LD_PRELOAD=.../blockheads_give.so` | Adds `/give-id` to stdin so the bot can give items to players, also adds trade  portal exploits |
 | `-o abc-1234` | Tells the server which world UUID to load |
 | `tee .../blockheads.log` | Bot tails this file to detect joins, leaves, and chat |
-| `-s 67` | Map size (67 = large) |
+| `-s 67` | Save Delay (67 = large) |
 | `-m 32` | Max players |
 
 ---
