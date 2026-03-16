@@ -92,18 +92,20 @@ def load_claims_from_sign_db(save_path):
     db_path = save_path + "world_db"
     try:
         env = lmdb.open(db_path, readonly=True, max_dbs=64, lock=False, readahead=False)
-        db_main = env.open_db(b"main")
-        with env.begin(db=db_main) as txn:
-            raw = txn.get(b"signOwnershipData")
-            if not raw:
-                return []
-            data = unwrap(parse_value(raw))
-            positions = []
-            extract_signs(data, positions)
-            for pos in positions:
-                if isinstance(pos, (list, tuple)) and len(pos) >= 2:
-                    claims.append({'x': int(pos[0]), 'y': int(pos[1])})
-        env.close()
+        try:
+            db_main = env.open_db(b"main")
+            with env.begin(db=db_main) as txn:
+                raw = txn.get(b"signOwnershipData")
+                if not raw:
+                    return []
+                data = unwrap(parse_value(raw))
+                positions = []
+                extract_signs(data, positions)
+                for pos in positions:
+                    if isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                        claims.append({'x': int(pos[0]), 'y': int(pos[1])})
+        finally:
+            env.close()
     except Exception as e:
         sys.stderr.write(f"Error reading signOwnershipData: {e}\n")
     return claims
@@ -144,6 +146,7 @@ def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_
     """
     db_path = save_path + "world_db"
 
+    env = None
     try:
         env = lmdb.open(db_path, readonly=True, max_dbs=100, map_size=6 * 1024 * 1024 * 1024)
 
@@ -195,8 +198,6 @@ def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_
                 except Exception:
                     continue
 
-        env.close()
-
         sys.stderr.write(f"Sampled {chunks_sampled} chunks: {len(candidate_trees)} trees, {len(claims)} claims\n")
 
         # Filter trees that aren't in claims and aren't too close to spawn
@@ -230,6 +231,12 @@ def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_
             'success': False,
             'error': str(e)
         }
+    finally:
+        if env is not None:
+            try:
+                env.close()
+            except Exception:
+                pass
 
 
 def list_claims(save_path):

@@ -572,9 +572,12 @@ Array of job types:
 | `/jobs` | View available jobs |
 | `/apply <job> <discord>` | Apply for a job |
 | `/rep <message>` | Submit a job report |
+| `/home` | Teleport to your saved home location |
+| `/sethome` | Save your current location as home |
+| `/delhome` | Delete your saved home |
 | `/coords` | Show your current coordinates |
 | `/whisper <player> <msg>` | Send a private message |
-| `/help` | List all commands |
+| `/cmds` | List all commands |
 
 ## Admin Commands
 
@@ -645,7 +648,7 @@ Ensure the proxy is running. The bot connects to the UDS event socket on startup
 Your username (uppercase) must be in `<paths.worldSave>/adminlist.txt`. The bot reads and watches this file live — no restart needed after editing it.
 
 **100% CPU / bot freezes**
-Send `kill -USR2 <pid>` to dump the stack to `data/node-stack-dump.txt`. The `@bhmb/server` patch in `postinstall` fixes a known infinite-loop bug in the message queue — run `npm install` in `bot/` to re-apply it.
+Send `kill -USR2 <pid>` to dump the stack to `data/node-stack-dump.txt`.
 
 **Proxy won't start**
 Java 21 is required. Use the generated launcher script (`proxy/interceptor/build/install/interceptor/bin/interceptor`) rather than `java -jar` — it includes all required `--enable-preview` flags automatically.

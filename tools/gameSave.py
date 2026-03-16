@@ -84,14 +84,16 @@ class GameSave:
             skip_sub_dbs = set()
         # Use a large map_size to avoid MDB_MAP_RESIZED when the file grows elsewhere.
         env = lmdb.open(path, readonly=True, max_dbs=self.MAX_DBS, map_size=self.MIN_MAP_SIZE)
-        with env.begin() as txn:
-            for k, _ in txn.cursor():
-                if k in skip_sub_dbs:
-                    continue  # Skip large/unnecessary sub-databases
-                sub_db = env.open_db(k, txn=txn, create=False)
-                dict_[k] = {}
-                self._read_db(txn, sub_db, dict_[k])
-        env.close()
+        try:
+            with env.begin() as txn:
+                for k, _ in txn.cursor():
+                    if k in skip_sub_dbs:
+                        continue  # Skip large/unnecessary sub-databases
+                    sub_db = env.open_db(k, txn=txn, create=False)
+                    dict_[k] = {}
+                    self._read_db(txn, sub_db, dict_[k])
+        finally:
+            env.close()
 
     def _read_db(self, txn, db, dict_):
         """
@@ -140,12 +142,14 @@ class GameSave:
                 size += len(k) + len(v)
         map_size = max(size * self.MAP_SIZE_MULTIPLIER + self.MAP_SIZE_PADDING, self.MIN_MAP_SIZE)
         env = lmdb.open(path, map_size=map_size, max_dbs=self.MAX_DBS)
-        with env.begin(write=True) as txn:
-            for k, v in db_data.items():
-                sub_db = env.open_db(k, txn=txn, create=True)
-                cursor = txn.cursor(sub_db)
-                self._write_db(cursor, db_data[k])
-        env.close()
+        try:
+            with env.begin(write=True) as txn:
+                for k, v in db_data.items():
+                    sub_db = env.open_db(k, txn=txn, create=True)
+                    cursor = txn.cursor(sub_db)
+                    self._write_db(cursor, db_data[k])
+        finally:
+            env.close()
 
     def save(self, path: str) -> None:
         """Save the world to the given path. Existing files would be overwrite."""

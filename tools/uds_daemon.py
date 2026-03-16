@@ -126,12 +126,16 @@ def dispatch(wm: WorldManager, req: dict) -> dict:
 def handle_client(conn: socket.socket, wm: WorldManager) -> None:
     """Handle all requests from a single connected client (the bot)."""
     buf = ''
+    MAX_BUF = 1_000_000  # 1MB - prevent unbounded growth from malformed input
     try:
         while True:
             data = conn.recv(65536)
             if not data:
                 break
             buf += data.decode('utf-8')
+            if len(buf) > MAX_BUF:
+                print('[WM Daemon] Buffer exceeded 1MB, dropping connection', file=sys.stderr, flush=True)
+                break
             while '\n' in buf:
                 line, buf = buf.split('\n', 1)
                 line = line.strip()

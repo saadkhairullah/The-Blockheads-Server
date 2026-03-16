@@ -58,6 +58,8 @@ public class BHInterceptor implements Runnable {
   private int maxClients;
   @Option(names = {"--command-socket"}, description = "Path to UDS command socket (bot sends commands here)", defaultValue = "${BH_COMMAND_SOCKET:-/tmp/bh-commands.sock}")
   private String commandSocket;
+  @Option(names = {"--event-socket"}, description = "Path to UDS event socket (proxy emits game events here)", defaultValue = "${BH_EVENT_SOCKET:-/tmp/bh-events.sock}")
+  private String eventSocket;
 
   // Maps client peer address to their server connection info
   private final Map<Long, ClientConnection> clientConnections = new ConcurrentHashMap<>();
@@ -148,7 +150,7 @@ public class BHInterceptor implements Runnable {
 
         // Start UDS event server
         try {
-          udsServer = new UDSEventServer(System.getProperty("bh.udsEventSocket", "/tmp/bh-events.sock"));
+          udsServer = new UDSEventServer(eventSocket);
           udsServer.start();
           EventLogger.setUDSServer(udsServer);
           logger.info("UDS event server started");

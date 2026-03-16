@@ -32,10 +32,11 @@ public final class SecurityHandler {
     // Load from file
     try {
       if (Files.exists(BLOCKED_IPS_FILE)) {
-        Files.lines(BLOCKED_IPS_FILE)
-            .map(String::trim)
-            .filter(line -> !line.isEmpty() && !line.startsWith("#"))
-            .forEach(blocked::add);
+        try (var lines = Files.lines(BLOCKED_IPS_FILE)) {
+          lines.map(String::trim)
+              .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+              .forEach(blocked::add);
+        }
         logger.info("Loaded {} blocked IPs from {}", blocked.size(), BLOCKED_IPS_FILE);
       }
     } catch (Exception e) {

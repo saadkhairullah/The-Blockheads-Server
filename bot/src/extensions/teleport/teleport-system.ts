@@ -250,6 +250,13 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
         pendingSelections.delete(player)
       }
     }
+    // Prune expired cooldowns
+    for (const [player, timestamp] of wildCooldowns.entries()) {
+      if (now - timestamp > WILD_COOLDOWN_MS) wildCooldowns.delete(player)
+    }
+    for (const [player, timestamp] of tpaCooldowns.entries()) {
+      if (now - timestamp > TPA_COOLDOWN_MS) tpaCooldowns.delete(player)
+    }
   }, 30000)
 
   ex.world.onMessage.sub(async ({ player, message }) => {
