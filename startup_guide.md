@@ -161,7 +161,7 @@ new BlockheadsBot(config)
   .use(TeleportSystem)      // /wild /tpa /spawn
   .use(JobSystem)           // /apply /hire /fire
   .use('whisper')           // /whisper
-  .use('commands-help')     // /help
+  .use('commands-help')     // /cmds
   .start()
 ```
 
@@ -177,7 +177,7 @@ What each extension does and when you'd skip it:
 | `TeleportSystem` | `/wild`, `/tpa`, `/tpaccept`, `/tpdeny`, `/spawn` | Small map where teleport would be too powerful |
 | `JobSystem` | `/apply`, `/hire`, `/fire`, `/rep` — employment and daily pay | You don't need a job system |
 | `whisper` | `/whisper <player> <msg>` — private messages | You don't want private messaging |
-| `commands-help` | `/help` command listing all commands | You'd rather players discover commands themselves |
+| `commands-help` | `/cmds` command listing all commands | You'd rather players discover commands themselves |
 
 **Dependency rules:** extensions that depend on each other must all be included or all excluded together:
 

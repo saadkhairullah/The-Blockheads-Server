@@ -76,7 +76,7 @@ Open `config/config.json` and fill in:
 | `server.worldId` | The UUID directory name inside your saves folder |
 | `paths.worldSave` | Full path to that UUID directory (trailing slash recommended) |
 
-The saves directory is typically `~/.local/share/TheBlockheads/saves/` on Linux.
+The saves directory is typically `~/GNUstep/Library/ApplicationSupport/TheBlockheads/saves/` on Linux.
 
 ### 2. Add yourself as admin
 
@@ -119,7 +119,10 @@ nohup bash -c '
 
 ```bash
 # Proxy
-proxy/interceptor/build/install/interceptor/bin/interceptor -P 15153 -S 15151
+proxy/interceptor/build/install/interceptor/bin/interceptor \
+  -P 15153 -S 15151 \
+  --event-socket /tmp/bh-events.sock \
+  --command-socket /tmp/bh-commands.sock
 
 # Bot
 cd bot && npm run mac
@@ -567,8 +570,14 @@ Array of job types:
 | `/tpa <player>` | Request teleport to another player |
 | `/tpaccept <player>` | Accept a teleport request |
 | `/tpdeny <player>` | Deny a teleport request |
-| `/balance` | Check your token balance |
+| `/balance` (`/bal`) | Check your token balance |
+| `/pay <player> <amount>` | Send tokens to another player |
+| `/cf <amount>` | Coin flip — double or nothing (max 1,000) |
+| `/transactions` (`/history`) | View recent transactions |
+| `/baltop` (`/leaderboard`) | Top token balances |
 | `/daily` | Claim daily reward (requires completing the quest chain) |
+| `/tracked` | See which blockhead is being tracked for quests/coords |
+| `/track <n>` | Choose which blockhead to track (for multi-blockhead players) |
 | `/jobs` | View available jobs |
 | `/apply <job> <discord>` | Apply for a job |
 | `/rep <message>` | Submit a job report |
@@ -642,7 +651,7 @@ Inventory is polled every 15 seconds. If it never updates, check that `paths.pyt
 You must use 64-bit Python. Run `python3 -c "import struct; print(struct.calcsize('P') * 8)"` — it must print `64`.
 
 **Events not detected / no joins/leaves**
-Ensure the proxy is running. The bot connects to the UDS event socket on startup; check both proxy and bot logs for socket errors. The socket path in the proxy (`bh.udsEventSocket`) must match what the bot's `uds-client.ts` connects to.
+Ensure the proxy is running. The bot connects to the UDS event socket on startup; check both proxy and bot logs for socket errors. The `--event-socket` value passed to the proxy must match what the bot connects to (configurable via `BH_EVENT_SOCKET` env var; default `/tmp/bh-events.sock`).
 
 **Admin commands not working**
 Your username (uppercase) must be in `<paths.worldSave>/adminlist.txt`. The bot reads and watches this file live — no restart needed after editing it.
