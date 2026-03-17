@@ -8,11 +8,8 @@
   "paths": {
     "worldSave": "/path/to/GNUstep/Library/ApplicationSupport/TheBlockheads/saves/YOUR_WORLD_UUID/",
     "python": "python3",
-    "worldManager": "./tools/world_manager.py",
-    "inventoryReader": "./tools/inventory_reader.py",
     "wildLocations": "./tools/wild_locations.py",
     "proxyCommandSock": "/tmp/bh-commands.sock",
-    "commandEvents": "./data/command_events.jsonl",
     "serverLog": "./data/blockheads.log",
     "inputPipe": "./data/blockheads_input",
     "dataDir": "./data",
