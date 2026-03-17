@@ -379,7 +379,7 @@ export const ShopSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): 
     }
   })
 
-  const { registerCategory } = require('./helpers/command-registry')
+  const { registerCategory } = require('../helpers/command-registry')
   registerCategory('shop', {
     name: 'Shop',
     player: [

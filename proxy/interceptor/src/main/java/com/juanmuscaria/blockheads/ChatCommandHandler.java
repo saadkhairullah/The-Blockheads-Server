@@ -317,12 +317,9 @@ public class ChatCommandHandler {
   private static boolean isLikelyPlist(byte[] data) {
     if (data.length < 4) return false;
     if (BHHelper.isBinaryPropertyList(data)) return true;
-    // XML plist starts with "<?xml" or "<plist" — require at least 5 bytes to avoid
-    // passing arbitrary binary packets starting with '<' to the SAX parser (causes
-    // spurious [Fatal Error] stderr output before the catch block can suppress it)
-    if (data.length >= 5 && data[0] == '<' && data[1] == '?' && data[2] == 'x' && data[3] == 'm' && data[4] == 'l') return true;
-    if (data.length >= 6 && data[0] == '<' && data[1] == 'p' && data[2] == 'l' && data[3] == 'i' && data[4] == 's' && data[5] == 't') return true;
-    return false;
+    // Accept any data starting with '<' — could be <?xml, <plist, <dict, etc.
+    // The SAX parser will reject non-XML gracefully in the catch block.
+    return data[0] == '<';
   }
 
   private static String normalizeAliasKey(String alias) {
