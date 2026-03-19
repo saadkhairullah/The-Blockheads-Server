@@ -42,6 +42,9 @@ class WorldManager:
             except Exception:
                 pass
         self._env = lmdb.open(self._db_path, max_dbs=self.MAX_DBS, map_size=self.MAP_SIZE)
+        stale = self._env.reader_check()
+        if stale:
+            print(f'[WorldManager] Purged {stale} stale LMDB reader slot(s)', flush=True)
 
     @contextmanager
     def _read_txn(self):

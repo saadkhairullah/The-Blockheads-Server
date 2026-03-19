@@ -7,6 +7,7 @@ import * as BlockheadService from '../../blockhead-service'
 import { sendPrivateMessage } from '../../private-message'
 import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
 import { getBankAPI as _getBankAPI, getActivityMonitorAPI as _getActivityMonitorAPI } from '../helpers/extension-api'
+import { playerManager } from '../helpers/blockhead-mapping'
 
 export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig): string => {
   MessageBot.registerExtension('teleport-system', (ex) => {
@@ -76,8 +77,22 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
     command: 'wild' | 'tp' | 'tpa' | 'spawn' | 'home' | 'sethome',
     extraData: Partial<PendingSelection> = {}
   ): Promise<{ blockheadId: number } | 'prompted' | null> => {
-    const blockheads = await BlockheadService.getBlockheadNames(playerUuid)
-    if (!blockheads || blockheads.length === 0) {
+    // Check in-memory cache first — active blockheads (moved in last 2min) are authoritative
+    // and resilient to LMDB autosave locks. Fall back to LMDB if cache is empty.
+    const ACTIVE_WINDOW_MS = 120000
+    const now = Date.now()
+    const p = playerManager.get(playerName) ?? playerManager.get(playerName.toUpperCase())
+    const activeBlockheads = p
+      ? Array.from(p.blockheads.entries())
+          .filter(([_, bh]) => bh.lastCoords && (now - bh.lastCoords.time) < ACTIVE_WINDOW_MS)
+          .map(([id, bh]) => ({ blockheadId: id, name: bh.name ?? 'Unknown' }))
+      : []
+
+    let blockheads = activeBlockheads.length > 0
+      ? activeBlockheads
+      : await BlockheadService.getBlockheadNames(playerUuid)
+
+    if (activeBlockheads.length === 0 && (!blockheads || blockheads.length === 0)) {
       sendPrivateMessage(playerName, `${playerName}: Could not find your blockheads. Please rejoin the server.`)
       return null
     }
