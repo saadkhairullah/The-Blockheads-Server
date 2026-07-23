@@ -1,0 +1,27 @@
+services:
+  blockheads:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: blockheads-server:latest
+    container_name: blockheads-server
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "${BH_PROXY_PORT:-15153}:15153/udp"
+    volumes:
+      - ../data:/data
+      # config.json is created inside /data on first run (copied from the baked-in
+      # config.example.json). Edit data/config.json to customize shop items, jobs,
+      # hooks, arena zone, etc. — no rebuild needed, just `docker compose restart`.
+      # To use your own file instead, uncomment and point it at an existing file:
+      #   - ../config/config.json:/data/config.json
+      # Mount your GNUstep directory (set BH_GNUSTEP_PATH in .env)
+      - ${BH_GNUSTEP_PATH}:/data/gnustep
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+

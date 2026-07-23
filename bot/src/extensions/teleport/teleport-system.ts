@@ -101,7 +101,15 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
       return { blockheadId: blockheads[0].blockheadId }
     }
 
-    // Multiple blockheads — prompt for selection
+    // Multiple blockheads — auto-select tracked blockhead if set
+    if (p && p.trackedBlockheadId != null) {
+      const tracked = blockheads.find(bh => bh.blockheadId === p.trackedBlockheadId)
+      if (tracked) {
+        return { blockheadId: tracked.blockheadId }
+      }
+    }
+
+    // Multiple blockheads, none tracked — prompt for selection
     const bhList = blockheads.map((bh, i) => `/${i + 1} - ${bh.name}`).join('\n')
     sendPrivateMessage(playerName, `${playerName}: Choose which blockhead to teleport:\n${bhList}`)
 
@@ -117,7 +125,7 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
     return 'prompted'
   }
 
-  // Shared teleport execution
+  // Shared teleport execution — kick + LMDB write via Python daemon
   const executeTeleport = async (
     playerName: string,
     blockheadId: number,
@@ -156,7 +164,7 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
 
   const executeWild = async (playerName: string, blockheadId: number, playerUuid: string, wildResult: { x: number, y: number }) => {
     const bankAPI = getBankAPI()
-    if (!bankAPI || !bankAPI.removeCoins(playerName, WILD_COST, `/wild teleport to (${wildResult.x}, ${wildResult.y})`)) {
+    if (bankAPI && !bankAPI.removeCoins(playerName, WILD_COST, `/wild teleport to (${wildResult.x}, ${wildResult.y})`)) {
       sendPrivateMessage(playerName, `${playerName}: Failed to deduct tokens. Please try again.`)
       return
     }
@@ -165,7 +173,7 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
 
     const result = await executeTeleport(playerName, blockheadId, wildResult.x, wildResult.y, playerUuid, '/wild')
     if (!result.ok) {
-      bankAPI.addCoins(playerName, WILD_COST, `/wild refund - teleport failed`)
+      if (bankAPI) bankAPI.addCoins(playerName, WILD_COST, `/wild refund - teleport failed`)
       wildCooldowns.delete(playerName)
     }
   }
@@ -190,14 +198,9 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
       return
     }
 
-    // Check balance
+    // Check balance (optional — free if economy not loaded)
     const bankAPI = getBankAPI()
-    if (!bankAPI || typeof bankAPI.hasCoins !== 'function' || typeof bankAPI.removeCoins !== 'function') {
-      sendPrivateMessage(playerName, `${playerName}: Banking system unavailable.`)
-      return
-    }
-
-    if (!bankAPI.hasCoins(playerName, WILD_COST)) {
+    if (bankAPI && !bankAPI.hasCoins(playerName, WILD_COST)) {
       const balance = typeof bankAPI.getBalance === 'function' ? bankAPI.getBalance(playerName) : null
       const balanceStr = balance !== null ? ` (balance: ${balance})` : ''
       sendPrivateMessage(playerName, `${playerName}: Not enough tokens. /wild costs ${WILD_COST} tokens${balanceStr}`)
@@ -314,14 +317,9 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
 
     const actualTargetName = targetPlayer.name
 
-    // Check balance
+    // Check balance (optional — free if economy not loaded)
     const bankAPI = getBankAPI()
-    if (!bankAPI) {
-      sendPrivateMessage(playerName, `${playerName}: Bank system unavailable.`)
-      return
-    }
-
-    if (!bankAPI.hasCoins(playerName, TPA_COST)) {
+    if (bankAPI && !bankAPI.hasCoins(playerName, TPA_COST)) {
       const balance = typeof bankAPI.getBalance === 'function' ? bankAPI.getBalance(playerName) : null
       const balanceStr = balance !== null ? ` (balance: ${balance})` : ''
       sendPrivateMessage(playerName, `${playerName}: Not enough tokens. /tpa costs ${TPA_COST} tokens${balanceStr}`)
@@ -414,14 +412,14 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
     const bankAPI = getBankAPI()
     const activityAPI = getActivityMonitorAPI()
 
-    if (!bankAPI || !activityAPI) {
+    if (!activityAPI) {
       sendPrivateMessage(targetName, `${targetName}: System unavailable. Please try again.`)
       sendPrivateMessage(request.fromPlayer, `${request.fromPlayer}: Teleport failed - system unavailable. Please try again.`)
       return
     }
 
-    // Deduct tokens from the requesting player
-    if (!bankAPI.removeCoins(request.fromPlayer, TPA_COST, `/tpa to ${targetName}`)) {
+    // Deduct tokens (optional — free if economy not loaded)
+    if (bankAPI && !bankAPI.removeCoins(request.fromPlayer, TPA_COST, `/tpa to ${targetName}`)) {
       sendPrivateMessage(targetName, `${targetName}: ${request.fromPlayer} doesn't have enough tokens.`)
       sendPrivateMessage(request.fromPlayer, `${request.fromPlayer}: Teleport failed - not enough tokens.`)
       return
@@ -435,7 +433,7 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
     const targetUuid = activityAPI.getPlayerUuid?.(targetName)
 
     if (!targetBlockheadId || !targetUuid) {
-      bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - target blockhead not found`)
+      if (bankAPI) bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - target blockhead not found`)
       tpaCooldowns.delete(request.fromPlayer)
       sendPrivateMessage(targetName, `${targetName}: Could not find your blockhead location.`)
       sendPrivateMessage(request.fromPlayer, `${request.fromPlayer}: Teleport failed. Tokens refunded.`)
@@ -449,7 +447,7 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
       // Get target's current position
       const targetPos = await BlockheadService.getBlockheadPosition(targetBlockheadId, targetUuid)
       if (!targetPos.ok || targetPos.x === undefined || targetPos.y === undefined) {
-        bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - could not get target position`)
+        if (bankAPI) bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - could not get target position`)
         tpaCooldowns.delete(request.fromPlayer)
         sendPrivateMessage(request.fromPlayer, `${request.fromPlayer}: Teleport failed - could not get target position. Tokens refunded.`)
         sendPrivateMessage(targetName, `${targetName}: Teleport failed - could not determine your position.`)
@@ -458,13 +456,13 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
 
       const result = await executeTeleport(request.fromPlayer, request.fromBlockheadId, targetPos.x, targetPos.y, request.fromUuid, '/tpa')
       if (!result.ok) {
-        bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - teleport failed`)
+        if (bankAPI) bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - teleport failed`)
         tpaCooldowns.delete(request.fromPlayer)
         sendPrivateMessage(targetName, `${targetName}: Teleport of ${request.fromPlayer} to you failed.`)
       }
     } catch (err) {
       console.error(`[/tpa] Error:`, err)
-      bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - error`)
+      if (bankAPI) bankAPI.addCoins(request.fromPlayer, TPA_COST, `/tpa refund - error`)
       tpaCooldowns.delete(request.fromPlayer)
       sendPrivateMessage(request.fromPlayer, `${request.fromPlayer}: Teleport failed due to an error. Tokens refunded.`)
       sendPrivateMessage(targetName, `${targetName}: Teleport of ${request.fromPlayer} to you failed due to an error.`)
@@ -780,4 +778,4 @@ export const TeleportSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfi
   return 'teleport-system'
 }
 TeleportSystem.extensionName = 'teleport-system'
-TeleportSystem.requires = ['virtual-bank', 'activity-monitor']
+TeleportSystem.requires = ['activity-monitor']

@@ -142,6 +142,28 @@ export const applyQuestItems = async (
 }
 
 /**
+ * Duel prep: atomically clear all inventory slots (except excluded item IDs) and give kit items.
+ * Done in one LMDB write transaction — no pre-read, no count mismatch.
+ * Backup/restore uses raw bytes separately (backupInventory/restoreInventory).
+ */
+export const duelClearAndGive = async (
+  blockheadId: number,
+  excludeItemIds: number[],
+  giveItems: { itemId: number, count: number }[],
+  playerUuid?: string
+): Promise<{ success: boolean, error?: string }> => {
+  try {
+    console.log(`[DuelPrep] Sending duel_clear_and_give: bhId=${blockheadId} uuid=${playerUuid} kit=${giveItems.length} items`)
+    const resp = await wm().send('duel_clear_and_give', { blockheadId, excludeItemIds, giveItems, playerUuid })
+    console.log(`[DuelPrep] Response:`, JSON.stringify(resp))
+    return { success: resp.success === true, error: resp.error as string | undefined }
+  } catch (err) {
+    console.error('[BlockheadService] duelClearAndGive failed:', err)
+    return { success: false, error: String(err) }
+  }
+}
+
+/**
  * Teleport a blockhead to specific coordinates.
  */
 export const teleportBlockhead = async (
@@ -196,6 +218,32 @@ export const findWildLocation = async (cfg: AppConfig): Promise<{ success: boole
   } catch (err) {
     console.error('[BlockheadService] findWildLocation failed:', err)
     return { success: false, error: String(err) }
+  }
+}
+
+/**
+ * Backup raw LMDB inventory bytes as base64. Zero data loss (preserves durability, color, level, basket contents, enchantments).
+ */
+export const backupInventory = async (blockheadId: number, playerUuid: string): Promise<string | null> => {
+  try {
+    const resp = await wm().send('backup_inventory', { blockheadId, playerUuid })
+    return resp.ok ? (resp.data as string | null) : null
+  } catch (err) {
+    console.error('[BlockheadService] backupInventory failed:', err)
+    return null
+  }
+}
+
+/**
+ * Restore raw LMDB inventory bytes from base64. Zero data loss.
+ */
+export const restoreInventory = async (blockheadId: number, playerUuid: string, data: string): Promise<boolean> => {
+  try {
+    const resp = await wm().send('restore_inventory', { blockheadId, playerUuid, data })
+    return resp.ok === true
+  } catch (err) {
+    console.error('[BlockheadService] restoreInventory failed:', err)
+    return false
   }
 }
 

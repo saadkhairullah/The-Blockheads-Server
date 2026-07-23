@@ -19,6 +19,7 @@ export interface ActivityMonitorAPI {
   getPlayerUuid: (player: string) => string | null
   addAdminAllowlist: (player: string) => void
   removeAdminAllowlist: (player: string) => void
+  getLastCoords: (player: string) => { x: number; y: number } | null
 }
 
 export interface QuestAPI {

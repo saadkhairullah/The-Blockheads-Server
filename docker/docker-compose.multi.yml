@@ -1,0 +1,63 @@
+# =============================================================================
+# Multi-Server Template — for hosting providers running multiple worlds
+# =============================================================================
+#
+# Usage:
+#   1. Build the image once:
+#        docker-compose -f docker-compose.multi.yml build
+#   2. Add servers using add-server.sh or by duplicating the pattern below.
+#   3. Start all servers:
+#        docker-compose -f docker-compose.multi.yml up -d
+#
+# Each service gets:
+#   - Its own port (players connect to the external port)
+#   - Its own data volume (world saves, quest progress, bot data)
+#   - Its own env file (world UUID, server name, etc.)
+#   - Optionally its own config.json or quest-data.json
+#
+# =============================================================================
+
+services:
+  server1:
+    image: blockheads-server:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: bh-server1
+    restart: unless-stopped
+    env_file: ./servers/server1.env
+    ports:
+      - "15153:15153/udp"
+    volumes:
+      - server1-data:/data
+      # Optional: mount custom config or quests for this world
+      # - ./servers/server1-config.json:/data/config.json:ro
+      # - ./servers/server1-quests.json:/data/quest-data.json:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  server2:
+    image: blockheads-server:latest
+    container_name: bh-server2
+    restart: unless-stopped
+    env_file: ./servers/server2.env
+    ports:
+      - "15154:15153/udp"
+    volumes:
+      - server2-data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # Add more servers by duplicating the block above.
+  # Increment the port number (15155, 15156, ...) for each new server.
+  # Create a matching servers/serverN.env with that server's world ID and name.
+
+volumes:
+  server1-data:
+  server2-data:

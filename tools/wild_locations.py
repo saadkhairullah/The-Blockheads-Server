@@ -87,14 +87,17 @@ def extract_signs(obj, out):
             extract_signs(v, out)
 
 
-def load_claims_from_sign_db(save_path):
+def load_claims_from_sign_db(save_path, env=None):
     claims = []
     db_path = save_path + "world_db"
+    own_env = env is None
+    local_env = env
     try:
-        env = lmdb.open(db_path, readonly=True, max_dbs=64, lock=False, readahead=False)
+        if local_env is None:
+            local_env = lmdb.open(db_path, readonly=True, max_dbs=64, lock=False, readahead=False)
         try:
-            db_main = env.open_db(b"main")
-            with env.begin(db=db_main) as txn:
+            db_main = local_env.open_db(b"main")
+            with local_env.begin(db=db_main) as txn:
                 raw = txn.get(b"signOwnershipData")
                 if not raw:
                     return []
@@ -105,13 +108,14 @@ def load_claims_from_sign_db(save_path):
                     if isinstance(pos, (list, tuple)) and len(pos) >= 2:
                         claims.append({'x': int(pos[0]), 'y': int(pos[1])})
         finally:
-            env.close()
+            if own_env and local_env is not None:
+                local_env.close()
     except Exception as e:
         sys.stderr.write(f"Error reading signOwnershipData: {e}\n")
     return claims
 
 
-def get_claims_cached(save_path, claims_cache_path=None):
+def get_claims_cached(save_path, claims_cache_path=None, env=None):
     cache_path = claims_cache_path or CLAIMS_CACHE_PATH
     try:
         if (os.path.exists(cache_path) and
@@ -120,7 +124,7 @@ def get_claims_cached(save_path, claims_cache_path=None):
                 return json.load(f)
     except Exception:
         pass
-    claims = load_claims_from_sign_db(save_path)
+    claims = load_claims_from_sign_db(save_path, env=env)
     try:
         cache_dir = os.path.dirname(cache_path)
         if cache_dir:
@@ -137,19 +141,9 @@ def get_all_claims_fast(save_path, claims_cache_path=None):
     return get_claims_cached(save_path, claims_cache_path)
 
 
-def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_spawn_distance=5000, claims_cache_path=None):
-    """
-    Find a random tree location using random chunk sampling.
-
-    Only parses sampled chunks - collects both protection signs and trees.
-    Much faster than scanning entire dw database.
-    """
-    db_path = save_path + "world_db"
-
-    env = None
+def find_wild_location_with_env(env, save_path, min_y=521, max_y=600, spawn_x=78405, min_spawn_distance=5000, claims_cache_path=None):
+    """Find a random wild location using a caller-provided, already-open LMDB env."""
     try:
-        env = lmdb.open(db_path, readonly=True, max_dbs=100, map_size=6 * 1024 * 1024 * 1024)
-
         # First: just get all chunk keys (no parsing - very fast)
         chunk_keys = []
         with env.begin() as txn:
@@ -164,7 +158,7 @@ def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_
         random.shuffle(chunk_keys)
 
         # Use signOwnershipData claims (no DW scan for signs)
-        claims = get_claims_cached(save_path, claims_cache_path)
+        claims = get_claims_cached(save_path, claims_cache_path, env=env)
         candidate_trees = []
         chunks_sampled = 0
 
@@ -225,6 +219,35 @@ def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_
             'valid_locations': len(valid_trees),
             'claims_found': len(claims)
         }
+
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+def find_wild_location_fast(save_path, min_y=521, max_y=600, spawn_x=78405, min_spawn_distance=5000, claims_cache_path=None):
+    """
+    Find a random tree location using random chunk sampling.
+
+    Only parses sampled chunks - collects both protection signs and trees.
+    Much faster than scanning entire dw database.
+    """
+    db_path = save_path + "world_db"
+
+    env = None
+    try:
+        env = lmdb.open(db_path, readonly=True, max_dbs=100, map_size=6 * 1024 * 1024 * 1024)
+        return find_wild_location_with_env(
+            env,
+            save_path,
+            min_y=min_y,
+            max_y=max_y,
+            spawn_x=spawn_x,
+            min_spawn_distance=min_spawn_distance,
+            claims_cache_path=claims_cache_path,
+        )
 
     except Exception as e:
         return {

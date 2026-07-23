@@ -103,9 +103,10 @@ export class UDSClient extends EventEmitter {
   }
 
   private handleEvent(event: ProxyEvent): void {
-    // Emit typed events
+    // Emit a single canonical event stream.
+    // Downstream routers (e.g. event-dispatcher, setupUDSEventHandlers)
+    // can fan out by event.type as needed.
     this.emit('event', event)
-    this.emit(event.type, event)
 
     // Debug logging (comment out in production)
     // console.log(`[UDS] ${event.type}:`, event)
@@ -151,11 +152,27 @@ export function setupUDSEventHandlers(
 ): UDSClient {
   const client = getUDSClient()
 
-  if (onJoin) client.on('join', onJoin)
-  if (onLeave) client.on('leave', onLeave)
-  if (onChat) client.on('chat', onChat)
-  if (onCommand) client.on('command', onCommand)
-  if (onPosition) client.on('position', onPosition)
+  client.on('event', (event: ProxyEvent) => {
+    switch (event.type) {
+      case 'join':
+        if (onJoin) onJoin(event)
+        break
+      case 'leave':
+        if (onLeave) onLeave(event)
+        break
+      case 'chat':
+        if (onChat) onChat(event)
+        break
+      case 'command':
+        if (onCommand) onCommand(event)
+        break
+      case 'position':
+        if (onPosition) onPosition(event)
+        break
+      default:
+        break
+    }
+  })
 
   return client
 }

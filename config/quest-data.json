@@ -1,0 +1,647 @@
+[
+  {
+    "id": "1",
+    "title": "Welcome to Blue Moon City",
+    "description": "You arrive in Blue Moon City for the first time. Get settled by visiting the Greenhouse and harvesting fresh fruit from the trees.",
+    "requirements": [
+      { "type": "travel", "x": 78440, "y": 530, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 12,   "itemName": "Basket",       "count": 1  },
+      { "itemId": 28,   "itemName": "Clay",          "count": 20 },
+      { "itemId": 25,   "itemName": "Flint Machete", "count": 1  },
+      { "type": "tokens", "count": 50 }
+    ],
+    "nextQuestId": "2"
+  },
+  {
+    "id": "2",
+    "title": "Learn the City",
+    "description": "Time to explore. Head to the Job Outpost and take a look — you might find work there someday.",
+    "requirements": [
+      { "type": "travel", "x": 78500, "y": 530, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 111, "itemName": "Boat",     "count": 1 },
+      { "itemId": 87,  "itemName": "Amethyst", "count": 1 },
+      { "type": "tokens", "count": 75 }
+    ],
+    "nextQuestId": "3"
+  },
+  {
+    "id": "3",
+    "title": "Harsh Seasons",
+    "description": "At the Job Outpost, a fellow Blockhead warns you: \"The weather's been brutal lately. You'll want proper clothing.\" Farm some Flax and craft Linen armour.",
+    "requirements": [
+      { "type": "collect", "itemId": 83, "itemName": "Linen", "count": 5 }
+    ],
+    "rewards": [
+      { "itemId": 1065, "itemName": "Safe", "count": 1 },
+      { "type": "tokens", "count": 100 }
+    ],
+    "nextQuestId": "4"
+  },
+  {
+    "id": "4",
+    "title": "Into the Stone Age",
+    "description": "Every survivor starts somewhere. Craft your first Stone Pickaxe and begin shaping your future.",
+    "requirements": [
+      { "type": "collect", "itemId": 34, "itemName": "Stone Pickaxe", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 47, "itemName": "Oil Lanterns", "count": 50 },
+      { "type": "tokens", "count": 125 }
+    ],
+    "nextQuestId": "5"
+  },
+  {
+    "id": "5",
+    "title": "Beneath the Surface",
+    "description": "Venture into the dark caves and uncover your first Sapphire — power enough to improve your tools.",
+    "requirements": [
+      { "type": "collect", "itemId": 86, "itemName": "Sapphire", "count": 1 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 150 },
+      { "itemId": 167, "itemName": "Gold Coin", "count": 10 }
+    ],
+    "nextQuestId": "6"
+  },
+  {
+    "id": "6",
+    "title": "A Moment of Rest",
+    "description": "You've earned a break. Visit the Mall and spend your hard-earned coins.",
+    "requirements": [
+      { "type": "travel", "x": 78380, "y": 520, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 86, "itemName": "Sapphire", "count": 1 },
+      { "type": "tokens", "count": 175 }
+    ],
+    "nextQuestId": "7"
+  },
+  {
+    "id": "7",
+    "title": "Shoppers in Need",
+    "description": "While shopping you find a struggling citizen who doesn't seem to be doing so well, but they invite you in for a cup of tea to chat.",
+    "requirements": [
+      { "type": "travel", "x": 78320, "y": 517, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 81, "itemName": "Coffee", "count": 15 },
+      { "type": "tokens", "count": 150 }
+    ],
+    "nextQuestId": "8"
+  },
+  {
+    "id": "8",
+    "title": "Whispers of Famine",
+    "description": "The poor citizen explains that civilians have been struggling with famine since the new king is so greedy. He points you to someone who might be able to help — living about 165 TC to the west.",
+    "requirements": [
+      { "type": "travel", "x": 71590, "y": 620, "radius": 25, "hideCoords": true }
+    ],
+    "rewards": [
+      { "itemId": 87, "itemName": "Amethyst", "count": 2 },
+      { "type": "tokens", "count": 200 }
+    ],
+    "nextQuestId": "8.1"
+  },
+  {
+    "id": "8.1",
+    "title": "Arrived at Old Man",
+    "description": "You've arrived at the old man's home. Speak with him to learn more about the fallen kingdom.",
+    "requirements": [
+      { "type": "travel", "x": 71590, "y": 620, "radius": 15 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 200 }
+    ],
+    "dialogue": [
+      "Old Man: \"I use to rule the kingdom far east, before a trechourous wizard cursed me and stole my strength.\"",
+      "Old Man: \"I have been waiting for someone like you to help me reclaim my throne.\"",
+      "Old Man: \"I can teach you many things, but first, I need you to prove your loyalty. Travel to the Wizard's Tower, 200 TC to the left of here.\""
+    ],
+    "nextQuestId": "8.2"
+  },
+  {
+    "id": "8.2",
+    "title": "After Hearing the Old Man's Tale",
+    "description": "He mentions another figure — the Astral Wizard — who cursed him and stole his strength. Travel 200+ TC to the left and find the Wizard's Tower.",
+    "requirements": [
+      { "type": "travel", "x": 64625, "y": 627, "radius": 20 }
+    ],
+    "rewards": [
+      { "itemId": 86, "itemName": "Sapphire", "count": 2 },
+      { "type": "tokens", "count": 150 }
+    ],
+    "dialogue": [
+      "Wizard: \"Who dares stepping in my tower?\"",
+      "You: \"I've been notified of a mighty wizard that lives here. I came to ask a few questions.\"",
+      "Wizard: \"WHO told you?\"",
+      "You: \"Word spreads. Power like yours isn't exactly hidden.\"",
+      "Wizard: \"…Power attracts many things. Admirers. Cowards. Traitors.\"",
+      "Wizard: \"Tell me something, traveler… You wouldn't happen to be assisting that frail old man in the city… would you?\"",
+      "You: \"I've spoken to many people.\"",
+      "Wizard: \"That is not what I asked. And I won't speak to you any longer until you bring me a shiny sapphire.\""
+    ],
+    "nextQuestId": "8.3"
+  },
+  {
+    "id": "8.3",
+    "title": "After Hearing the Old Man's Tale (PART 2)",
+    "description": "Collect a sapphire and amethyst and bring it back to the Astral Wizard",
+    "requirements": [
+      { "type": "travel",  "x": 64625, "y": 627, "radius": 20 },
+      { "type": "collect", "itemId": 86, "itemName": "Sapphire", "count": 1, "consume": true },
+      { "type": "collect", "itemId": 87, "itemName": "Amethyst", "count": 1, "consume": true }
+    ],
+    "rewards": [
+      { "itemId": 76, "itemName": "Emerald", "count": 2 },
+      { "type": "tokens", "count": 150 }
+    ],
+    "dialogue": [
+      "You: \"I came to understand… about the old king and the curse.\"",
+      "Wizard: \"The old king feared battle more than failure. His hesitation almost destroyed everything. I bent time forward to show him the cost of weakness.\"",
+      "You: \"So you went out there and cursed him?\"",
+      "Wizard: \"A curse? No. I call it a lesson. I only bounded him with the Time Crystal, twisted his fate with the Sun Clock… and trapped a fragment of his own spirit as the soul of my spell…\"",
+      "You: \"Wait… Time Crystal? Sun Clock? Soul?\"",
+      "Wizard: \"Yes… yes, the so-called Celestial Stones. Each one holds a fragment of his life, his power… his essence\"",
+      "Wizard: \"And you… bringing me these gems… proves you are not merely loyal to that feeble old man. Perhaps you are capable of understanding why I did what I did\"",
+      "Wizard: \"Enough talk for now. Scram. Bring your wits and courage back when you are ready for what comes next\""
+    ],
+    "nextQuestId": "30.1"
+  },
+  {
+    "id": "30.1",
+    "title": "Never Hungry Again",
+    "description": "Travel east until you find the east equator where the Hat of Fullness lies. Wear that hat so you never feel hungry ever again.",
+    "requirements": [
+      { "type": "collect", "itemId": 140, "itemName": "Hat of Fullness", "count": 1 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 360 },
+      { "itemId": 72, "itemName": "Gold Ingot", "count": 20 },
+      { "itemId": 81, "itemName": "Coffee",     "count": 50 }
+    ],
+    "nextQuestId": "9"
+  },
+  {
+    "id": "9",
+    "title": "Prove Your Worth",
+    "description": "Now that you have heard the old man's story and visited the Wizard's Tower, advance yourself and enter the Iron Age to prove your worth.",
+    "requirements": [
+      { "type": "collect", "itemId": 65, "itemName": "Iron Ingot", "count": 5 }
+    ],
+    "rewards": [
+      { "itemId": 65, "itemName": "Iron Ingot", "count": 5 },
+      { "itemId": 76, "itemName": "Emerald",    "count": 3 },
+      { "type": "tokens", "count": 225 }
+    ],
+    "nextQuestId": "16"
+  },
+  {
+    "id": "16",
+    "title": "Portal Construction",
+    "description": "Craft a Portal. You might need this later.",
+    "requirements": [
+      { "type": "collect", "itemId": 134, "itemName": "Portal", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 75, "itemName": "Ruby", "count": 3 },
+      { "type": "tokens", "count": 400 }
+    ],
+    "nextQuestId": "17"
+  },
+  {
+    "id": "17",
+    "title": "Market Access",
+    "description": "Craft a Trade Portal and get the economy going.",
+    "requirements": [
+      { "type": "collect", "itemId": 210, "itemName": "Trade Portal", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 260, "itemName": "Platinum Coin", "count": 1 },
+      { "type": "tokens", "count": 425 }
+    ],
+    "nextQuestId": "10"
+  },
+  {
+    "id": "10",
+    "title": "A Hungry Old Man",
+    "description": "The old man is feeling very hungry. Bring him 6 slices of pizza.",
+    "requirements": [
+      { "type": "collect", "itemId": 317, "itemName": "Pizza", "count": 6, "consume": true },
+      { "type": "travel",  "x": 71590, "y": 620, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 86, "itemName": "Sapphire", "count": 1 },
+      { "type": "tokens", "count": 250 }
+    ],
+    "nextQuestId": "11"
+  },
+  {
+    "id": "11",
+    "title": "Armed at Last",
+    "description": "The world grows dangerous. Craft an Iron Sword — you'll need it soon.",
+    "requirements": [
+      { "type": "collect", "itemId": 68, "itemName": "Iron Sword", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 65, "itemName": "Iron Ingot", "count": 15 },
+      { "itemId": 75, "itemName": "Ruby",    "count": 1  },
+      { "type": "tokens", "count": 275 }
+    ],
+    "nextQuestId": "11.1"
+  },
+  {
+    "id": "11.1",
+    "title": "Hitman",
+    "description": "Now that you've got that sharp blade, word spreads of a sword-fighting competition in the arena next door. Go there, swing like a maniac, and eliminate one unlucky player — make it count. COORDS: (x76923,y607)",
+    "requirements": [
+      { "type": "kill", "killCount": 1 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 210 },
+      { "itemId": 86,  "itemName": "Sapphire",  "count": 3  },
+      { "itemId": 167, "itemName": "Gold Coin", "count": 50 }
+    ],
+    "nextQuestId": "11.2"
+  },
+  {
+    "id": "11.2",
+    "title": "Suit Up",
+    "description": "Now that you've gotten a taste of blood, suit up against other players. Craft your first piece of Tin Armour.",
+    "requirements": [
+      { "type": "collect", "anyItemIds": [187, 188, 189, 190], "itemName": "Tin Armour Piece", "count": 1 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 220 },
+      { "itemId": 76,  "itemName": "Emerald",       "count": 2 },
+      { "itemId": 260, "itemName": "Platinum Coin", "count": 1 }
+    ],
+    "nextQuestId": "18"
+  },
+  {
+    "id": "18",
+    "title": "Big Baller",
+    "description": "You've struck something rare — titanium. Wealth and power follow.",
+    "requirements": [
+      { "type": "collect", "itemId": 279, "itemName": "Titanium Ores", "count": 5 }
+    ],
+    "rewards": [
+      { "itemId": 86, "itemName": "Sapphire", "count": 2 },
+      { "itemId": 280, "itemName": "Titanium Ingot", "count": 5 },
+      { "type": "tokens", "count": 450 }
+    ],
+    "nextQuestId": "18.1"
+  },
+  {
+    "id": "18.1",
+    "title": "Triple or Nothing",
+    "description": "Craft a Sapphire Pickaxe — every ore you mine now drops triple!",
+    "requirements": [
+      { "type": "collect", "itemId": 95, "itemName": "Sapphire Pickaxe", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 75, "itemName": "Ruby", "count": 1 },
+      { "type": "tokens", "count": 240 }
+    ],
+    "nextQuestId": "12"
+  },
+  {
+    "id": "12",
+    "title": "Fading Health",
+    "description": "You hear the old man's sickness is getting worse. Go into the Drylands to acquire some medicine and bring it back to him.",
+    "requirements": [
+      { "type": "travel",  "x": 71590, "y": 620, "radius": 10 },
+      { "type": "collect", "itemId": 255, "itemName": "Poison", "count": 10, "consume": true }
+    ],
+    "rewards": [
+      { "itemId": 75, "itemName": "Ruby", "count": 1 },
+      { "type": "tokens", "count": 250 }
+    ],
+    "dialogue": [
+      "Old Man: \"Thank you… this should help me feel better.\"",
+      "Old Man: \"Now I have another favor for you.\"",
+      "Old Man: \"Travel to The Crystal Tide Cave — 50 TC to the left of my house.\"",
+      "Old Man: \"There you will collect the Crystal of Time, the first stone in defeating the Astral Wizard and freeing me from this curse.\""
+    ],
+    "nextQuestId": "20.1"
+  },
+  {
+    "id": "20.1",
+    "lmdbDelivery": true,
+    "title": "A Crystal of Time",
+    "description": "Travel to The Crystal Tide Cave, 50 TC to the left of the old man's house, and collect the Crystal of Time — the first Celestial Stone.",
+    "requirements": [
+      { "type": "travel", "x": 69119, "y": 485, "radius": 20 }
+    ],
+    "rewards": [
+      { "itemId": 523, "itemName": "Time Crystal", "count": 1 },
+      { "type": "tokens", "count": 260 }
+    ],
+    "nextQuestId": "13"
+  },
+  {
+    "id": "13",
+    "title": "The Golden Age",
+    "description": "Progress marches on. Upgrade your furnace and craft your first Gold Ingot — then forge a Golden Shovel.",
+    "requirements": [
+      { "type": "collect", "itemId": 72, "itemName": "Gold Ingot", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 89, "itemName": "Gold Spade", "count": 1 },
+      { "type": "tokens", "count": 325 }
+    ],
+    "nextQuestId": "14"
+  },
+  {
+    "id": "14",
+    "title": "Buried Fortune",
+    "description": "Use your new shovel and head back into a desert to scavenge for treasure — find a Golden Chest.",
+    "requirements": [
+      { "type": "collect", "itemId": 1072, "itemName": "Gold Chest", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 75, "itemName": "Ruby", "count": 2 },
+      { "type": "tokens", "count": 350 }
+    ],
+    "nextQuestId": "23.1"
+  },
+  {
+    "id": "23.1",
+    "title": "Diamond Awakening",
+    "description": "Explore the dark, dangerous depths of a cave and dig up your first Diamond — your first real step into serious mining.",
+    "requirements": [
+      { "type": "collect", "itemId": 88, "itemName": "Diamond", "count": 1 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 290 },
+      { "itemId": 260, "itemName": "Platinum Coin", "count": 10 }
+    ],
+    "nextQuestId": "15"
+  },
+  {
+    "id": "15",
+    "title": "Hell Diver",
+    "description": "Strength isn't just physical — it's mental. Survive the burn of lava for one full minute.",
+    "requirements": [
+      { "type": "travel", "y": 55, "radius": 3 }
+    ],
+    "rewards": [
+      { "itemId": 88, "itemName": "Diamond", "count": 1 },
+      { "type": "tokens", "count": 375 }
+    ],
+    "nextQuestId": "25.1"
+  },
+  {
+    "id": "25.1",
+    "title": "Gladiator's Rampage",
+    "description": "You've been hearing a lot of ruckus coming from the arena every time you walk by. Go in there and eliminate 3 players.",
+    "requirements": [
+      { "type": "kill", "killCount": 3 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 310 },
+      { "itemId": 260, "itemName": "Platinum Coin", "count": 25 },
+      { "itemId": 92, "itemName": "Steel Ingot", "count": 10 }
+    ],
+    "nextQuestId": "19"
+  },
+  {
+    "id": "19",
+    "title": "Interior Designer",
+    "description": "The Old Man wants to brighten his home with something truly special. Craft a Emerald Chandelier and bring it to him.",
+    "requirements": [
+      { "type": "collect", "itemId": 147, "itemName": "Emerald Chandelier", "count": 1, "consume": true },
+      { "type": "travel",  "x": 71590, "y": 620, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 88, "itemName": "Diamond", "count": 1 },
+      { "type": "tokens", "count": 475 }
+    ],
+    "dialogue": [
+      "Old Man: \"I've uncovered the next clue about the curse.\"",
+      "Old Man: \"When the Astral Wizard cast it, he forced me thirty years into the future.\"",
+      "Old Man: \"Climb to the top of the city's clock tower.\"",
+      "Old Man: \"Bring five golden ingots as an offering.\"",
+      "Old Man: \"There, you will awaken the Timeless Sun Clock — the next Celestial Stone.\""
+    ],
+    "nextQuestId": "27.1"
+  },
+  {
+    "id": "27.1",
+    "title": "The Timeless Sun",
+    "description": "Climb to the top of the city's clock tower and bring five golden ingots as an offering to awaken the Timeless Sun Clock — the second Celestial Stone.",
+    "requirements": [
+      { "type": "travel",  "x": 83030, "y": 590, "radius": 15 },
+      { "type": "collect", "itemId": 72, "itemName": "Gold Ingot", "count": 5, "consume": true }
+    ],
+    "rewards": [
+      { "itemId": 9, "itemName": "Timeless Sun Clock", "count": 1 },
+      { "type": "tokens", "count": 330 }
+    ],
+    "nextQuestId": "27.2"
+  },
+  {
+    "id": "27.2",
+    "title": "The Highest in the Room",
+    "description": "Reach the highest coordinate possible in Blockheads. Fly your Jetpack to the very top of the world.",
+    "requirements": [
+      { "type": "travel", "y": 1017, "radius": 10 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 340 },
+      { "itemId": 260, "itemName": "Platinum Coin", "count": 40 },
+      { "itemId": 81,  "itemName": "Coffee",        "count": 20 }
+    ],
+    "nextQuestId": "20"
+  },
+  {
+    "id": "20",
+    "title": "Favorite Meal",
+    "description": "Ever since the uprising, the old man hasn't been able to get his favourite meal. Bring him Fish Stew.",
+    "requirements": [
+      { "type": "collect", "itemId": 181, "itemName": "Fish Curry", "count": 1, "consume": true },
+      { "type": "travel",  "x": 71590, "y": 620, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 88, "itemName": "Diamond", "count": 2 },
+      { "type": "tokens", "count": 400 }
+    ],
+    "nextQuestId": "21"
+  },
+  {
+    "id": "21",
+    "title": "The Cave Troll",
+    "description": "Deep underground, a Cave Troll guards powerful Ice Armor. Defeat it and claim your prize.",
+    "requirements": [
+      { "type": "collect", "anyItemIds": [195, 196, 197, 198], "itemName": "Ice Armor Piece", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 273, "itemName": "Carbon Fibers",  "count": 5 },
+      { "itemId": 280, "itemName": "Titanium Ingot", "count": 3 },
+      { "type": "tokens", "count": 525 }
+    ],
+    "nextQuestId": "22"
+  },
+  {
+    "id": "22",
+    "title": "Strange Egg",
+    "description": "The old man's chicken hatched a weird-looking egg. Bring him an Eggcavator to uncover its valuables.",
+    "requirements": [
+      { "type": "collect", "itemId": 1096, "itemName": "Egg Extractor", "count": 1, "consume": true },
+      { "type": "travel",  "x": 71590, "y": 620, "radius": 10 }
+    ],
+    "rewards": [
+      { "itemId": 280, "itemName": "Titanium Ingot", "count": 2 },
+      { "type": "tokens", "count": 450 }
+    ],
+    "nextQuestId": "23"
+  },
+  {
+    "id": "23",
+    "title": "Industrial Might",
+    "description": "True power requires infrastructure. Craft an Oil Refinery.",
+    "requirements": [
+      { "type": "collect", "itemId": 270, "itemName": "Refinery", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 88, "itemName": "Diamond", "count": 2 },
+      { "type": "tokens", "count": 600 }
+    ],
+    "nextQuestId": "24"
+  },
+  {
+    "id": "24",
+    "title": "Into the Sky",
+    "description": "Craft a Jetpack and rise above the world, uncovering what lies beyond.",
+    "requirements": [
+      { "type": "collect", "itemId": 278, "itemName": "Jetpack", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 269, "itemName": "Fuel", "count": 198 },
+      { "type": "tokens", "count": 650 }
+    ],
+    "nextQuestId": "35.1"
+  },
+  {
+    "id": "35.1",
+    "title": "Assassinator",
+    "description": "Go to the arena and eliminate 5 players.",
+    "requirements": [
+      { "type": "kill", "killCount": 5 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 420 },
+      { "itemId": 260, "itemName": "Platinum Coin", "count": 99 }
+    ],
+    "nextQuestId": "35.2"
+  },
+  {
+    "id": "35.2",
+    "title": "Ritual of Restoration",
+    "description": "The Old Man needs you urgently — he has figured out the final clue to freeing himself. Visit him, then bring one of each gem (Amethyst, Sapphire, Ruby, Emerald, Diamond) and ten Rainbow Essence to the demon's altar beneath the castle.",
+    "requirements": [
+      { "type": "travel", "x": 71590, "y": 620, "radius": 10 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 440 },
+      { "itemId": 280, "itemName": "Titanium Ingot", "count": 10 },
+      { "itemId": 88,  "itemName": "Diamond",        "count": 3  }
+    ],
+    "dialogue": [
+      "Old Man: \"You've finally arrived… I've made a breakthrough.\"",
+      "Old Man: \"The curse was not just time… it was separation.\"",
+      "Old Man: \"He didn't just age me forward. He tore something from me.\"",
+      "You: \"Tore what?\"",
+      "Old Man: \"My younger self… my spirit… my strength. It lives as something else now.\"",
+      "Old Man: \"Beneath the castle lies a hidden altar. A demon's altar… the very place where the wizard cast the spell.\"",
+      "Old Man: \"You must undo the ritual.\"",
+      "Old Man: \"Bring one of each gem — Amethyst, Sapphire, Ruby, Emerald, Diamond.\"",
+      "Old Man: \"And ten Rainbow Essence. That energy will stabilize my younger spirit.\"",
+      "You: \"And then?\"",
+      "Old Man: \"Go beneath the castle. Place them on the altar.\"",
+      "Old Man: \"What awakens will be powerful… and unstable.\"",
+      "Old Man: \"Bring my younger self back to me… and this curse will finally end.\""
+    ],
+    "nextQuestId": "35.3"
+  },
+  {
+    "id": "35.3",
+    "title": "Demon Altar",
+    "description": "Visit the demon altar to retrieve the Old Man's Soul — the final piece needed to break the curse. Bring one of each gem (Amethyst, Sapphire, Ruby, Emerald, Diamond) and ten Rainbow Essence to the altar to complete the ritual of restoration.",
+    "requirements": [
+      { "type": "travel",  "x": 78230, "y": 469, "radius": 10 },
+      { "type": "collect", "itemId": 87,  "itemName": "Amethyst",       "count": 1,  "consume": true },
+      { "type": "collect", "itemId": 86,  "itemName": "Sapphire",       "count": 1,  "consume": true },
+      { "type": "collect", "itemId": 75,  "itemName": "Ruby",           "count": 1,  "consume": true },
+      { "type": "collect", "itemId": 76,  "itemName": "Emerald",        "count": 1,  "consume": true },
+      { "type": "collect", "itemId": 88,  "itemName": "Diamond",        "count": 1,  "consume": true },
+      { "type": "collect", "itemId": 329, "itemName": "Rainbow Essence","count": 10, "consume": true }
+    ],
+    "rewards": [
+      { "itemId": 531, "itemName": "Old Man's Soul", "count": 1 },
+      { "type": "tokens", "count": 440 }
+    ],
+    "lmdbDelivery": true,
+    "nextQuestId": "35.4"
+  },
+  {
+    "id": "35.4",
+    "title": "The King Reborn",
+    "description": "You've collected all 3 Celestial stones — the Time Crystal, the Timeless Sun Clock, and the Old Man's Soul. Bring them to the old man so he can regain his power and youth.",
+    "requirements": [
+      { "type": "travel",  "x": 71590, "y": 620, "radius": 10 },
+      { "type": "collect", "itemId": 523, "itemName": "Time Crystal",      "count": 1, "consume": true },
+      { "type": "collect", "itemId": 9,   "itemName": "Timeless Sun Clock", "count": 1, "consume": true },
+      { "type": "collect", "itemId": 531, "itemName": "Old Man's Soul",     "count": 1, "consume": true }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 460 },
+      { "itemId": 269, "itemName": "Fuel",    "count": 99 },
+      { "itemId": 88,  "itemName": "Diamond", "count": 3  }
+    ],
+    "dialogue": [
+      "Old Man: \"I… I cannot believe it… I am whole again! Young… strong… alive!\"",
+      "Old Man: \"You've done what I could never do myself. You've undone the curse in a single moment… yet I can feel the Astral Wizard's gaze even now. He will not forgive this.\"",
+      "You: \"Then it's only a matter of time before we confront him — but we have bigger worries. We must take back the kingdom.\"",
+      "Old Man: \"Yes… but for now, we celebrate this victory. My power, my youth, my very soul… all restored thanks to you.\"",
+      "Old Man: \"Now, gather for me the Ice Armor and the Titanium Sword. With them, I will finish this fool of a king once and for all!\""
+    ],
+    "nextQuestId": "25"
+  },
+  {
+    "id": "25",
+    "title": "Sky Island Trial",
+    "description": "Travel far left of spawn and ascend to the Sky Islands. At the Cave Troll Shrine, exchange your Ice Armor for a full set. Rumours say it can be found between 110 TC and 165 TC west of spawn.",
+    "requirements": [
+      { "type": "travel",  "x": 73360, "y": 900, "radius": 50, "hideCoords": true },
+      { "type": "collect", "anyItemIds": [195, 196, 197, 198], "itemName": "Ice Armor Piece", "count": 1 }
+    ],
+    "rewards": [
+      { "itemId": 195, "itemName": "Ice Armor Leggings", "count": 1 },
+      { "itemId": 196, "itemName": "Ice Chest Plate",    "count": 1 },
+      { "itemId": 197, "itemName": "Ice Helmet",         "count": 1 },
+      { "itemId": 198, "itemName": "Ice Boots",          "count": 1 },
+      { "type": "tokens", "count": 700 }
+    ],
+    "nextQuestId": "26"
+  },
+  {
+    "id": "26",
+    "title": "The Final Stand",
+    "description": "Bring the Titanium Sword and Ice Armor to the old man to help him reclaim the kingdom and overthrow the corrupt king. Completing this quest unlocks /daily.",
+    "requirements": [
+      { "type": "collect", "itemId": 286, "itemName": "Titanium Sword",     "count": 1 },
+      { "type": "collect", "itemId": 195, "itemName": "Ice Armor Leggings", "count": 1 },
+      { "type": "collect", "itemId": 196, "itemName": "Ice Chest Plate",    "count": 1 },
+      { "type": "collect", "itemId": 197, "itemName": "Ice Helmet",         "count": 1 },
+      { "type": "collect", "itemId": 198, "itemName": "Ice Boots",          "count": 1 },
+      { "type": "travel",  "x": 71590, "y": 620, "radius": 10 }
+    ],
+    "rewards": [
+      { "type": "tokens", "count": 725 }
+    ]
+  }
+]

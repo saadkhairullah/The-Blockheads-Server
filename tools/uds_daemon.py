@@ -20,12 +20,13 @@ import os
 import json
 import socket
 import signal
+import base64
 
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, TOOLS_DIR)
 
 from world_manager_service import WorldManager
-from wild_locations import find_wild_location_fast
+from wild_locations import find_wild_location_with_env
 
 SOCKET_PATH = os.environ.get('BH_WM_SOCK', '/tmp/bh-wm.sock')
 
@@ -94,6 +95,15 @@ def dispatch(wm: WorldManager, req: dict) -> dict:
             )
             return {'id': req_id, **result}
 
+        elif cmd == 'duel_clear_and_give':
+            result = wm.duel_clear_and_give(
+                int(req['blockheadId']),
+                req.get('excludeItemIds', []),
+                req.get('giveItems', []),
+                req.get('playerUuid'),
+            )
+            return {'id': req_id, **result}
+
         elif cmd == 'teleport_blockhead':
             result = wm.teleport_blockhead(
                 req['playerUuid'],
@@ -103,9 +113,19 @@ def dispatch(wm: WorldManager, req: dict) -> dict:
             )
             return {'id': req_id, **result}
 
+        elif cmd == 'backup_inventory':
+            raw = wm.backup_inventory(req['playerUuid'], int(req['blockheadId']))
+            return {'id': req_id, 'ok': True, 'data': base64.b64encode(raw).decode() if raw else None}
+
+        elif cmd == 'restore_inventory':
+            raw = base64.b64decode(req['data'])
+            ok = wm.restore_inventory(req['playerUuid'], int(req['blockheadId']), raw)
+            return {'id': req_id, 'ok': ok}
+
         elif cmd == 'find_wild_location':
             save_path = wm._save_path.rstrip('/') + '/'
-            result = find_wild_location_fast(
+            result = find_wild_location_with_env(
+                wm._env,
                 save_path,
                 int(req.get('minY', 521)),
                 int(req.get('maxY', 600)),

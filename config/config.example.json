@@ -46,5 +46,78 @@
     { "key": "RAILROAD_INSTALLER", "name": "Railroad Installer", "dailyPay": 200 },
     { "key": "PUBLIC_BUILDER", "name": "Public Builder", "dailyPay": 200 },
     { "key": "ELECTRICIAN", "name": "Electrician", "dailyPay": 200 }
-  ]
+  ],
+  "extensions": {
+    "buff-shop": false,
+    "boss-rewards": false,
+    "duel-system": false
+  },
+  "hooks": {
+    "trollAIMaxWait": 3,
+    "boss": {
+      "enabled": false,
+      "hp": 4096,
+      "damage": 60,
+      "speed": 40,
+      "timer": 0.01,
+      "aggro": 64,
+      "aggroRidden": 64,
+      "flight": true,
+      "loot": { "itemId": 88, "count": 10 },
+      "projectile": { "enabled": true, "rate": 3, "type": 255, "damage": 40 },
+      "teleport":   { "enabled": true, "rate": 2, "range": 1, "maxDist": 64 }
+    },
+    "bossArena": {
+      "x1": 0, "y1": 0,
+      "x2": 0, "y2": 0,
+      "autoBuff": false,
+      "lootScale": true,
+      "buffValue": 5.0
+    },
+    "poison": { "enabled": false, "damage": 0.01, "ticks": 20 },
+    "trade":   { "enabled": true },
+    "claims":  { "enabled": true },
+    "godmode": { "enabled": false },
+    "network": { "enabled": true },
+    "duel": {
+      "enabled": false,
+      "countdown": 10,
+      "timeout": 300,
+      "pendingTimeout": 60,
+      "arena": { "x": 0, "y": 0 },
+      "tokenReward": 100,
+      "kit": [
+        { "itemId": 68,  "count": 1 },
+        { "itemId": 193, "count": 1 },
+        { "itemId": 192, "count": 1 },
+        { "itemId": 191, "count": 1 },
+        { "itemId": 190, "count": 1 },
+        { "itemId": 257, "count": 1 },
+        { "itemId": 182, "count": 20 }
+      ]
+    },
+    "arena": {
+      "enabled": false,
+      "waveDelay": 10,
+      "maxWaves": 10,
+      "lootId": 88,
+      "lootCount": 20,
+      "mobCountBase": 2,
+      "rewardPerWave": false,
+      "perWaveRewardId": 88,
+      "perWaveRewardCount": 5,
+      "waves": [
+        { "mobType": 6, "count": 2 },
+        { "mobType": 6, "count": 4 },
+        { "mobType": 6, "count": 6 },
+        { "mobType": 6, "count": 8 },
+        { "mobType": 6, "count": 10 },
+        { "mobType": 6, "count": 12 },
+        { "mobType": 6, "count": 14 },
+        { "mobType": 6, "count": 16 },
+        { "mobType": 6, "count": 18 },
+        { "mobType": 6, "count": 20 }
+      ]
+    }
+  }
 }

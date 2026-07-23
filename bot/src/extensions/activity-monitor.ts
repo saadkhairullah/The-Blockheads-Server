@@ -344,12 +344,31 @@ export const ActivityMonitor: ExtensionFactory = (_bot: BotContext, cfg: AppConf
     return bestId ?? p.lastBlockheadId ?? null
   }
 
+  const getLastCoords = (playerName: string): { x: number; y: number } | null => {
+    const p = playerManager.get(playerName)
+    if (!p) return null
+    let bestCoords: { x: number; y: number } | null = null
+    let bestTime = 0
+    for (const [, bh] of p.blockheads) {
+      if (bh.lastCoords && bh.lastCoords.time > bestTime) {
+        bestTime = bh.lastCoords.time
+        bestCoords = { x: bh.lastCoords.x, y: bh.lastCoords.y }
+      }
+    }
+    if (!bestCoords && p.lastBlockheadId) {
+      const bh = p.blockheads.get(p.lastBlockheadId)
+      if (bh?.lastCoords) bestCoords = { x: bh.lastCoords.x, y: bh.lastCoords.y }
+    }
+    return bestCoords
+  }
+
   ex.exports = {
     addAdminAllowlist: (playerName: string) => addPortalChestBuyer(ctx, playerName),
     removeAdminAllowlist: (playerName: string) => removePortalChestBuyer(ctx, playerName),
     getBlockheadsForPlayer,
     getMostRecentBlockheadId,
     getPlayerUuid,
+    getLastCoords,
   }
 
   const { registerCategory } = require('./helpers/command-registry')

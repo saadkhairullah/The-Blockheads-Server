@@ -192,7 +192,8 @@ public class ChatCommandHandler {
             || lower.startsWith("/repair")
             || lower.startsWith("/reset-owner")
             || lower.startsWith("/stop")
-            || lower.startsWith("/save")) {
+            || lower.startsWith("/save")
+            ) {
           return false;  // Forward to server
         }
         return true;  // Drop custom bot commands

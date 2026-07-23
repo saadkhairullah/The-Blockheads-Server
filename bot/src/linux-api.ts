@@ -40,9 +40,17 @@ let messageCallback: ((msg: ChatMessage) => void) | null = null
 let joinCallback: ((player: { name: string; id: string }) => void) | null = null
 let leaveCallback: ((player: { name: string; id: string }) => void) | null = null
 let killCallback: ((killer: string, victim: string) => void) | null = null
+const killCallbacks: ((killer: string, victim: string) => void)[] = []
 
 // Tracks the last player to land a hit on each victim (victim playerName → attacker playerName)
 const lastHit: Map<string, string> = new Map()
+
+// UUID → playerName for currently online players.
+// Set on "Player Connected", cleared on first disconnect (Client or Player Disconnected).
+// Lets us fire leaveCallback immediately on "Client disconnected:UUID" instead of waiting
+// for the slow "Player Disconnected NAME" line (which can arrive 10+ seconds later).
+const onlineByUuid: Map<string, string> = new Map()
+const onlineByName: Map<string, string> = new Map()  // lowercase name → original name
 
 
 export class Api {
@@ -226,23 +234,47 @@ export function watchChat(cfg: AppConfig) {
               const playerName = connectMatch[1]
               const playerId = connectMatch[2]
               console.log(`[watchChat] Player joined: ${playerName} (${playerId})`)
-              
+              onlineByUuid.set(playerId, playerName)
+              onlineByName.set(playerName.toLowerCase(), playerName)
               if (joinCallback) {
                 joinCallback({ name: playerName, id: playerId })
               }
             }
             continue
           }
-          
-          // Check for player disconnections  
+
+          // "Client disconnected:UUID" — TCP connection dropped.
+          // Fire leaveCallback immediately (first occurrence only) so waitForLeave in duel
+          // and other systems don't have to wait for the slow "Player Disconnected" line.
+          if (line.includes('Client disconnected')) {
+            const uuidMatch = line.match(/Client disconnected:([a-f0-9]+)/i)
+            if (uuidMatch) {
+              const uuid = uuidMatch[1]
+              const playerName = onlineByUuid.get(uuid)
+              if (playerName && onlineByName.has(playerName.toLowerCase())) {
+                onlineByName.delete(playerName.toLowerCase())
+                onlineByUuid.delete(uuid)
+                console.log(`[watchChat] Player left: ${playerName}`)
+                if (leaveCallback) leaveCallback({ name: playerName, id: uuid })
+              }
+            }
+            continue
+          }
+
+          // "Player Disconnected NAME" — server-side session cleanup (fires later, sometimes 10s+).
+          // Acts as fallback for players who were already online when the bot started (UUID not tracked).
           if (line.includes('Player Disconnected')) {
             const disconnectMatch = line.match(/Player Disconnected\s+(\S+)/)
             if (disconnectMatch) {
               const playerName = disconnectMatch[1]
-              console.log(`[watchChat] Player left: ${playerName}`)
-              
-              if (leaveCallback) {
-                leaveCallback({ name: playerName, id: playerName })
+              if (onlineByName.has(playerName.toLowerCase())) {
+                onlineByName.delete(playerName.toLowerCase())
+                // Clean up uuid map too (find by value)
+                for (const [uuid, name] of onlineByUuid) {
+                  if (name === playerName) { onlineByUuid.delete(uuid); break }
+                }
+                console.log(`[watchChat] Player left (late): ${playerName}`)
+                if (leaveCallback) leaveCallback({ name: playerName, id: playerName })
               }
             }
             continue
@@ -263,14 +295,18 @@ export function watchChat(cfg: AppConfig) {
             const victim = deathMatch[1].trim()
             const killer = lastHit.get(victim)
             lastHit.delete(victim)
-            if (killer && killCallback) {
-              killCallback(killer, victim)
+            if (killer) {
+              if (killCallback) killCallback(killer, victim)
+              for (const cb of killCallbacks) cb(killer, victim)
             }
             continue
           }
 
-          // Skip other system messages
-          if (line.includes('SERVER:') || line.includes('Client disconnected')) {
+          // Skip other system messages (but let duel protocol through)
+          if (line.includes('Client disconnected')) {
+            continue
+          }
+          if (line.includes('SERVER:') && !line.includes('[DUEL:')) {
             continue
           }
           
@@ -335,5 +371,9 @@ export function setLeaveCallback(callback: (player: { name: string; id: string }
 export function setKillCallback(callback: (killer: string, victim: string) => void) {
   console.log('[setKillCallback] Callback registered')
   killCallback = callback
+}
+
+export function addKillCallback(callback: (killer: string, victim: string) => void) {
+  killCallbacks.push(callback)
 }
 

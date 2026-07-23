@@ -1,0 +1,31 @@
+# Build artifacts
+hooks/libblockheads_hooks.so
+bot/build/
+bot/node_modules/
+proxy/.gradle/
+proxy/interceptor/build/
+proxy/build/
+
+# Runtime data
+data/
+*.log
+*.jsonl
+blockheads_input
+
+# Dev/local files
+.env
+docker/.env
+docker/servers/
+config/config.json
+
+# Git
+.git/
+.gitmodules
+
+# Misc
+*.tmp
+*.swp
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc

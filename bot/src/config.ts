@@ -42,6 +42,12 @@ export interface AppConfig {
   }
   shop: ShopItemConfig[]
   jobs: JobConfig[]
+  hooks: {
+    duel: {
+      tokenReward: number
+      kit: { itemId: number; count: number }[]
+    }
+  }
 }
 
 export interface ShopItemConfig {
@@ -170,6 +176,18 @@ export function loadConfig(configPath?: string): AppConfig {
     jobs: parsed.jobs ?? [
       { key: 'PUBLIC_BUILDER', name: 'Public Builder', dailyPay: 200 },
     ],
+    hooks: {
+      duel: {
+        tokenReward: parsed.hooks?.duel?.tokenReward ?? 100,
+        kit: parsed.hooks?.duel?.kit ?? [
+          { itemId: 162, count: 1 },
+          { itemId: 170, count: 1 },
+          { itemId: 174, count: 1 },
+          { itemId: 178, count: 1 },
+          { itemId: 265, count: 64 },
+        ],
+      },
+    },
   }
 }
 

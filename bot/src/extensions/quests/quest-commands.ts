@@ -1,17 +1,8 @@
-import { QuestContext, LOG_QUEST_CACHE, LOG_BOT_DEBUG } from './quest-context'
+import { QuestContext } from './quest-context'
 import { sendPrivateMessage } from '../../private-message'
 import { isAdmin as isAdminHelper } from '../helpers/isAdmin'
-import { getCurrentQuest, getPlayerProgress, getPendingRewards, clearPendingRewards, hasPendingRewards, addToPendingRewards, applySeasonResetForPlayer, applySeasonReset } from './quest-persistence'
-import { formatReward, executeGiveCommand, isPlayerCurrentlyAtLocation } from './quest-completion'
-
-const isShuttingDown = (ctx: QuestContext): boolean => {
-  try {
-    const { existsSync } = require('fs')
-    return existsSync(ctx.shutdownFlagPath)
-  } catch {
-    return false
-  }
-}
+import { getCurrentQuest, getPlayerProgress, applySeasonResetForPlayer, applySeasonReset } from './quest-persistence'
+import { formatReward, isPlayerCurrentlyAtLocation } from './quest-completion'
 
 export const registerQuestCommands = (ctx: QuestContext) => {
   // /quests command
@@ -58,80 +49,6 @@ export const registerQuestCommands = (ctx: QuestContext) => {
 
     sendPrivateMessage(playerName, `\n--- ${quest.title} ---\n${quest.description}\nRequirements:\n${requirementLines.join('\n')}\nRewards:\n${rewardLines.join('\n')}`)
 
-    if (hasPendingRewards(ctx, playerName)) {
-      const pending = getPendingRewards(ctx, playerName)
-      sendPrivateMessage(playerName, `You have ${pending.length} unclaimed reward(s)! Type /claim to receive them.`)
-    }
-  })
-
-  // /claim command
-  ctx.world.onMessage.sub(async ({ player, message }) => {
-    if (message !== '/claim') return
-
-    if (isShuttingDown(ctx)) {
-      sendPrivateMessage(player.name, `${player.name}: Claims temporarily disabled - bot restarting soon.`)
-      return
-    }
-
-    const playerName = player.name
-    const pending = getPendingRewards(ctx, playerName)
-
-    if (pending.length === 0) {
-      sendPrivateMessage(playerName, `${playerName}: No pending rewards to claim.`)
-      return
-    }
-
-    if (LOG_QUEST_CACHE) console.log(`[Quest Debug] /claim for ${playerName}: ${pending.length} pending rewards`)
-
-    const allRewards: Array<{ itemId: number; count: number; itemName?: string }> = []
-    for (const pr of pending) {
-      for (const r of pr.rewards) {
-        if (typeof r.itemId === 'number' && r.itemId > 0 && r.count > 0) {
-          allRewards.push({ itemId: r.itemId, count: r.count, itemName: r.itemName })
-        }
-      }
-    }
-
-    if (allRewards.length === 0) {
-      sendPrivateMessage(playerName, `${playerName}: No item rewards to claim.`)
-      clearPendingRewards(ctx, playerName)
-      return
-    }
-
-    const totalRewards: string[] = []
-    for (const pr of pending) {
-      for (const r of pr.rewards) {
-        totalRewards.push(formatReward(r))
-      }
-    }
-    sendPrivateMessage(playerName, `${playerName}: Claiming ${pending.length} reward(s): ${totalRewards.join(', ')}`)
-
-    setTimeout(() => {
-      const delivered: typeof allRewards = []
-      const failed: typeof allRewards = []
-
-      for (const item of allRewards) {
-        const success = executeGiveCommand(ctx, playerName, item.itemId, item.count)
-        if (success) {
-          delivered.push(item)
-          if (LOG_BOT_DEBUG) console.log(`[Quest System] /claim ${playerName}: gave ${item.count}x ${item.itemName ?? `item ${item.itemId}`} via /give`)
-        } else {
-          failed.push(item)
-        }
-      }
-
-      if (delivered.length > 0) {
-        const itemDesc = delivered.map(i => `${i.count}x ${i.itemName ?? `item ${i.itemId}`}`).join(', ')
-        sendPrivateMessage(playerName, `${playerName}: Rewards delivered: ${itemDesc}`)
-      }
-
-      if (failed.length > 0) {
-        addToPendingRewards(ctx, playerName, failed, 'Failed /claim delivery')
-        sendPrivateMessage(playerName, `${playerName}: Some rewards failed to deliver. Please LEAVE the server, wait 5 seconds, then REJOIN and type /claim again.`)
-      } else {
-        clearPendingRewards(ctx, playerName)
-      }
-    }, 1500)
   })
 
   // Admin commands

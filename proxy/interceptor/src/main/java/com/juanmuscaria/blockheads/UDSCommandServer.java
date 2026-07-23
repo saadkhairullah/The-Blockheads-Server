@@ -115,15 +115,14 @@ public class UDSCommandServer {
   }
 
   /**
-   * Drain all pending messages. Called from the main ENet loop each tick.
+   * Drain all pending private messages. Called from the main ENet loop each tick.
    * Non-blocking.
    */
   public List<PrivateMessage> drainMessages() {
     List<PrivateMessage> result = new ArrayList<>();
     PrivateMessage msg;
-    while ((msg = queue.poll()) != null) {
-      result.add(msg);
-    }
+    while ((msg = queue.poll()) != null) result.add(msg);
     return result;
   }
+
 }

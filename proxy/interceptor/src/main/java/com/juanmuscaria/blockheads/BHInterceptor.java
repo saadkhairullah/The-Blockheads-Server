@@ -272,17 +272,19 @@ public class BHInterceptor implements Runnable {
                 // Will be cleaned up when client disconnect event fires
               } else if (type == ENet.ENET_EVENT_TYPE_RECEIVE()) {
                 var packet = ENetEvent.packet$get(event);
-                ENet.enet_peer_send(conn.clientPeer(), ENetEvent.channelID$get(event), copyPackage(packet));
-                Packet detected = attemptPacketDetection(packet, ENetEvent.channelID$get(event), Side.SERVER);
+                int channelId = ENetEvent.channelID$get(event);
+
+                ENet.enet_peer_send(conn.clientPeer(), (byte) channelId, copyPackage(packet));
+                Packet detected = attemptPacketDetection(packet, channelId, Side.SERVER);
                 if (!chatHandler.isChatChannelCaptured()) {
-                  chatHandler.tryCaptureChatChannelFromServerPacket(packet, ENetEvent.channelID$get(event), detected);
+                  chatHandler.tryCaptureChatChannelFromServerPacket(packet, channelId, detected);
                 }
                 ENet.enet_packet_destroy(packet);
               }
             }
           }
 
-          // Drain commands and dispatch (currently: private messages)
+          // Drain commands and dispatch (private messages + seamless teleports)
           if (commandServer != null) {
             for (var pmsg : commandServer.drainMessages()) {
               String target = pmsg.target();
@@ -299,6 +301,7 @@ public class BHInterceptor implements Runnable {
                 logger.warn("Private message target '{}' not found. Registered players: {}", target, chatHandler.getRegisteredPlayerNames());
               }
             }
+
           }
         }
         Thread.currentThread().interrupt(); // Restore interrupt status

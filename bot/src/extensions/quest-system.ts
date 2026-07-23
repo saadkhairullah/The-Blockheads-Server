@@ -212,7 +212,6 @@ export const QuestSystem: ExtensionFactory = (_bot: BotContext, cfg: AppConfig):
     name: 'Quests',
     player: [
       { cmd: '/quest', alias: '/quests', desc: 'View your current quest and progress' },
-      { cmd: '/claim', desc: 'Claim pending quest rewards' },
     ],
     admin: [
       { cmd: '/questskip', desc: 'Skip a player to their next quest' },

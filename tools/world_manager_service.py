@@ -148,9 +148,10 @@ class WorldManager:
     def _resolve_inv_key(txn, main_db, blockhead_uid, player_uuid):
         """Resolve inventory key. O(log n) with player_uuid, O(n) without."""
         if player_uuid:
-            key = f"{player_uuid}_blockhead_{blockhead_uid}_inventory".encode('utf-8')
-            if txn.get(key, db=main_db):
-                return key
+            for uuid_variant in [player_uuid, player_uuid.replace('-', '')]:
+                key = f"{uuid_variant}_blockhead_{blockhead_uid}_inventory".encode('utf-8')
+                if txn.get(key, db=main_db):
+                    return key
             return None
         return WorldManager._find_inventory_key(txn, main_db, blockhead_uid)
 
@@ -406,6 +407,91 @@ class WorldManager:
         except Exception as e:
             return {"success": False, "error": f"apply_quest_items error: {e}"}
 
+    def duel_clear_and_give(self, blockhead_uid, exclude_item_ids, give_items, player_uuid=None):
+        """Atomically clear all inventory (except excluded item IDs) and place kit items.
+
+        Uses _take_items (same proven path as apply_quest_items) for removal.
+        Reads counts + removes + gives all in one write transaction — no stale-count race.
+        """
+        exclude_set = set(int(x) for x in exclude_item_ids)
+        print(f'[DuelPrep] START bhId={blockhead_uid} uuid={player_uuid} exclude={exclude_set} kit={len(give_items)} items', flush=True)
+        try:
+            with self._write_txn() as (txn, main_db):
+                inv_key = self._resolve_inv_key(txn, main_db, blockhead_uid, player_uuid)
+                if not inv_key:
+                    print(f'[DuelPrep] FAIL: player_uuid_not_found', flush=True)
+                    return {"success": False, "error": "player_uuid_not_found"}
+
+                raw = txn.get(inv_key, db=main_db)
+                if not raw:
+                    print(f'[DuelPrep] FAIL: inventory_not_found key={inv_key}', flush=True)
+                    return {"success": False, "error": "inventory_not_found"}
+
+                print(f'[DuelPrep] Found inv key={inv_key} raw_bytes={len(raw)}', flush=True)
+                inv_wrapper = parse_value(raw)
+                inv_data = inv_wrapper._data[0]._data
+                print(f'[DuelPrep] Parsed {len(inv_data)} slots', flush=True)
+
+                # Count every non-excluded item in slots 1-7 (slot 0 is the clothing slot — never touch it).
+                items_to_remove = {}
+                for slot_idx, slot_data in enumerate(inv_data):
+                    if slot_idx == 0:
+                        print(f'[DuelPrep]   slot 0: skipped (clothing slot)', flush=True)
+                        continue
+                    if not isinstance(slot_data, list) or len(slot_data) == 0:
+                        print(f'[DuelPrep]   slot {slot_idx}: empty (type={type(slot_data).__name__})', flush=True)
+                        continue
+                    item_obj = Item(slot_data)
+                    item_id = item_obj.get_id()
+                    item_count = item_obj.get_count()
+                    print(f'[DuelPrep]   slot {slot_idx}: itemId={item_id} count={item_count}', flush=True)
+
+                    if item_id == 12:  # Basket — count items inside
+                        basket_storage = get_basket_slots(item_obj)
+                        if basket_storage:
+                            for bidx in range(4):
+                                slot_item = get_slot_item(basket_storage[3 - bidx])
+                                if slot_item and slot_item.get_id() > 0:
+                                    bid = slot_item.get_id()
+                                    if bid not in exclude_set:
+                                        items_to_remove[bid] = items_to_remove.get(bid, 0) + slot_item.count
+                        if item_id not in exclude_set:
+                            items_to_remove[item_id] = items_to_remove.get(item_id, 0) + item_count
+                    else:
+                        if item_id not in exclude_set and item_id > 0:
+                            items_to_remove[item_id] = items_to_remove.get(item_id, 0) + item_count
+
+                print(f'[DuelPrep] Items to remove: {items_to_remove}', flush=True)
+
+                # Remove using _take_items, but guard slot 0 first.
+                # Temporarily hide slot 0 so _take_items can never touch it.
+                slot0 = inv_data[0]
+                inv_data[0] = []
+                for item_id, count in items_to_remove.items():
+                    taken = self._take_items(inv_data, item_id, count)
+                    print(f'[DuelPrep] _take_items({item_id}, {count}) -> taken={taken}', flush=True)
+                inv_data[0] = slot0  # restore clothing slot
+
+                # Give kit items — hide slot 0 again so kit never overwrites clothing.
+                inv_data[0] = []
+                print(f'[DuelPrep] Placing kit: {give_items}', flush=True)
+                error = self._place_items(inv_data, give_items)
+                inv_data[0] = slot0  # restore clothing slot before writing
+                if error is not None:
+                    print(f'[DuelPrep] FAIL placing kit: {error}', flush=True)
+                    return error
+
+                exported = inv_wrapper.export()
+                print(f'[DuelPrep] Writing {len(exported)} bytes (was {len(raw)})', flush=True)
+                txn.put(inv_key, exported, db=main_db)
+                print(f'[DuelPrep] SUCCESS - txn.put done', flush=True)
+                return {"success": True}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f'[DuelPrep] EXCEPTION: {e}', flush=True)
+            return {"success": False, "error": f"duel_clear_and_give error: {e}"}
+
     # -----------------------------------------------------------------------
     # Public API — blockhead data operations
     # -----------------------------------------------------------------------
@@ -565,6 +651,45 @@ class WorldManager:
         except Exception as e:
             print(f'[WorldManager] get_blockhead_inventory_counts error for blockhead {blockhead_id}: {e}')
         return {}
+
+    # -----------------------------------------------------------------------
+    # Public API — raw inventory backup/restore (for duels)
+    # -----------------------------------------------------------------------
+
+    def backup_inventory(self, player_uuid, blockhead_id):
+        """Read raw LMDB bytes for a blockhead's inventory. Returns bytes or None."""
+        uuid_variants = [player_uuid, player_uuid.replace('-', '')]
+        suffix = f'_blockhead_{blockhead_id}_inventory'.encode('utf-8')
+        try:
+            with self._read_txn() as (txn, main_db):
+                for uuid_variant in uuid_variants:
+                    key = uuid_variant.encode('utf-8') + suffix
+                    val = txn.get(key, db=main_db)
+                    if val:
+                        return bytes(val)
+        except Exception as e:
+            print(f'[WorldManager] backup_inventory error for blockhead {blockhead_id}: {e}')
+        return None
+
+    def restore_inventory(self, player_uuid, blockhead_id, data):
+        """Write raw bytes to a blockhead's inventory key. Returns True on success."""
+        uuid_variants = [player_uuid, player_uuid.replace('-', '')]
+        suffix = f'_blockhead_{blockhead_id}_inventory'.encode('utf-8')
+        try:
+            with self._write_txn() as (txn, main_db):
+                # Find the existing key variant
+                for uuid_variant in uuid_variants:
+                    key = uuid_variant.encode('utf-8') + suffix
+                    if txn.get(key, db=main_db) is not None:
+                        txn.put(key, data, db=main_db)
+                        return True
+                # Fallback: use first variant
+                key = uuid_variants[0].encode('utf-8') + suffix
+                txn.put(key, data, db=main_db)
+                return True
+        except Exception as e:
+            print(f'[WorldManager] restore_inventory error for blockhead {blockhead_id}: {e}')
+            return False
 
     # -----------------------------------------------------------------------
     # Public API — owner lookup
